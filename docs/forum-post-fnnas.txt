@@ -15,6 +15,8 @@
 
 FN Photo 是一个 Android TV 端的飞牛相册客户端。它走的是飞牛相册自己的接口（不是把 NAS 当文件共享来读），所以在电视上看到的就是相册 App 里的那份内容：时间线、相册、文件夹、人脸、服务端缩略图、Live Photo 和视频都在。
 
+图标是一个太阳加两道山脊 —— 深色底、不套相框，在电视应用列表那种小尺寸下也看得清（Android 8 及以上会按系统桌面的形状自动裁切成圆形或圆角方形）。
+
 【图 1：我的照片（时间线）】
 
 ■ 主要功能
@@ -59,6 +61,7 @@ FN Photo 是一个 Android TV 端的飞牛相册客户端。它走的是飞牛�
 
 1. 下载 APK（版本 1.2，66 MiB —— 体积主要是随包内置的背景音乐；包名 com.kungfucode.fntvphoto）：
    https://github.com/kungfucode-rex/fn-tv-photo/releases/latest
+   Release 页上的文件是 FN-tvphoto-1.2.apk，68,898,927 字节，SHA-256 E4128197…AD8409。
    （论坛附件放得下的话也会传一份，两个地方是同一个包）
 
 2. 安装（三种任选）：
@@ -69,6 +72,8 @@ FN Photo 是一个 Android TV 端的飞牛相册客户端。它走的是飞牛�
 3. 首次打开填 NAS 地址，例如 192.168.31.14:50317（不写端口就按飞牛默认的 5667 走），再填飞牛的账号和密码。NAS 如果开了访问码，会多出一个访问码输入框。
 
 【图 13：登录页】
+
+【图 14：应用图标】
 
 手机也能装，装完有正常图标，不过界面还是强制横屏的遥控器布局，主要是给自己排查问题用的。
 
@@ -97,7 +102,7 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
 回帖时麻烦带上：电视 / 盒子的型号、Android 版本、现象，最好再附上设置页里的「上次崩溃」，这样好定位。也欢迎直接去 GitHub 提 issue。
 
 ══════════════════════════════════════════════════════════════
- 配图（已处理，直接上传这 13 张）
+ 配图（已处理，直接上传这 14 张）
 ══════════════════════════════════════════════════════════════
 
   artifacts/forum/1-timeline.jpg         图 1   我的照片 / 时间线（1920x1080，144 KB）
@@ -113,9 +118,11 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
   artifacts/forum/11-light-theme.jpg     图 11  浅色主题（153 KB）
   artifacts/forum/12-settings.jpg        图 12  设置页（80 KB）
   artifacts/forum/13-login.jpg           图 13  登录页（39 KB）
+  artifacts/forum/app-icon.png           图 14  应用图标（512x512 PNG，21 KB）
 
   · 源图是 artifacts/screenshots/forum-*.jpg（模拟器截图，1920x1080），再压成这里的 JPEG：
-    质量 84、渐进式、1920x1080，13 张共 2.1 MB。
+    质量 84、渐进式、1920x1080，13 张共 2.1 MB。图 14 是图标本身：512x512 PNG，
+    整块深色底板，不透明，直接上传即可。
   · 截图里的照片是 mock 服务器现在带的测试照片 —— 真照片，不是以前的渐变色块。
     来源与授权见 tools/mock-nas/assets/photos/CREDITS.md（Unsplash 授权，可自由使用）。
     想自己重新拉一套：node tools/mock-nas/fetch-photos.js。
@@ -129,12 +136,17 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
 
   [x] GitHub 仓库已上线：https://github.com/kungfucode-rex/fn-tv-photo
       （原先这里写的是 https://github.com/fn-tv-photo，那个地址不存在。）
-  [x] Release v1.2 已发布，APK 挂在上面：
+  [x] Release v1.2 已发布（2026-10-07 23:17 由 draft 转公开），APK 挂在上面：
+      https://github.com/kungfucode-rex/fn-tv-photo/releases/tag/v1.2
       https://github.com/kungfucode-rex/fn-tv-photo/releases/download/v1.2/FN-tvphoto-1.2.apk
-      68,897,839 字节，SHA-256 6D07CF86…CCE6A37。已从 Release 下载回来比对过，
-      与本地构建的包逐字节一致。
-      注意：这台机器连不上 github.com（TCP 443 超时），api.github.com 和资源域名正常。
-      发帖前如果还是这样，Release 页面自己打不开是正常的，别人不一定；真不行就先挂网盘。
+      68,898,927 字节，SHA-256 E4128197…AD8409。GitHub 自己记的 digest 与本地构建的包逐字节一致；
+      下载链接实测 302 → 200，Content-Length 68898927。说明页里的文件名 / 大小 / SHA-256
+      已经同步成这个包，旧的那份 APK 已从 Release 删除（只留一份，不会装错）。
+      注：这台机器在 23:07–23:17 之间对 GitHub 的**所有写接口**都返回 500（读取和 git push 都正常），
+      后台重试到第 4 次才恢复；github.com 本身可以正常访问，早先那条「TCP 443 超时」已不再成立。
+  [x] 桌面图标已换成新的（一个太阳 + 两道山脊）：Android 8+ 用自适应图标，
+      由系统桌面按自己的形状裁切；Android 6–7（API 23–25）用层级图回退。
+      预览图 artifacts/forum/app-icon.png（正文【图 14】）。
   [ ] APK 怎么给：release 包现在 **66 MiB**（9 首内置音乐占了 54 MiB），
       论坛附件的单文件上限多半放不下，先看一眼「附件」按钮旁边写的限制：
         · 放得下 → 再传一份附件；
@@ -146,6 +158,7 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
       （标题格式、必须附截图、是否要求说明收费 / 安全等）。
   [x] 应用名已从 TV Photo 改成 FN Photo（桌面图标名、登录页标题、设置页的那行版本号，
       以及登录时上报给 NAS 的设备名），版本号随之升到 1.2 / versionCode 3。
-      新包：app/build/outputs/apk/release/FN-tvphoto-1.2.apk（未发到 \\fnos-ms01\Temp\软件）。
+      新包：app/build/outputs/apk/release/FN-tvphoto-1.2.apk
+      （已发到 \\fnos-ms01\Temp\软件\FN-tvphoto-1.2-20261007-230148.apk，同一份字节）。
       包名仍是 com.kungfucode.fntvphoto —— 对 Android 来说它和旧的 com.tvphoto 是两个 App，
       会各自出现一个图标；装了旧的先卸载。

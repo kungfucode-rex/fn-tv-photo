@@ -9,6 +9,13 @@ It talks to the fnOS photo gallery's own API — the same one the official app u
 so it gets the real timeline, albums, folders, server-side thumbnails, Live Photos
 and video streaming, rather than treating the NAS as a dumb file share.
 
+<img src="artifacts/forum/app-icon.png" width="96" alt="The FN Photo icon">
+
+**The icon** is one sun and two ridges. Nothing is framed and nothing is outlined, so it
+still reads at the small size a TV app list draws. The same artwork also ships as an
+adaptive icon, which lets an Android 8+ home screen crop it to its own shape (circle,
+rounded square); Android 6–7 gets a layer-list fallback, that being this app's floor.
+
 ![Timeline](artifacts/forum/1-timeline.jpg)
 
 ## Screenshots
@@ -266,7 +273,14 @@ press at a time.
 
 ## Install
 
-Build a signed APK:
+A signed APK is on the GitHub release page, so building it is optional:
+
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.2.apk`,
+65.7 MiB, SHA-256 `E4128197A18CA60C5C620F58750B5EF57AAC2158DFCBC08610A9A66E78AD8409` (the
+release notes quote it too). The same file also lands in the share described below; the two
+are one build.
+
+To build it yourself:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
@@ -493,6 +507,14 @@ verification was built deliberately:
    an audio `MediaCodec` being built for it, with nothing about a missing asset.
    `SlideshowMusicTest` is what keeps the catalogue honest off the device: it fails the
    build if any of the nine names a file the APK does not carry.
+
+10. **The icon** — no test proves a picture looks right, so the new one was rendered and
+   looked at before it became a vector: drawn at 512 / 192 / 96 / 48 px, then masked with a
+   circle and a rounded square, which is what a home screen crops an adaptive icon with.
+   After the build, `aapt2 dump badging` confirms `application-icon` resolves to
+   `res/mipmap-anydpi-v26/ic_launcher.xml` and that the APK also carries the API 23–25
+   fallback; the system's own drawing of it was checked in the TV emulator's
+   **Settings → Apps** list.
 
 Two bugs were found only by testing the way a user actually would:
 

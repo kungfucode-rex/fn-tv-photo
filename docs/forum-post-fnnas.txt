@@ -114,7 +114,7 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
   artifacts/forum/12-settings.jpg        图 12  设置页（80 KB）
   artifacts/forum/13-login.jpg           图 13  登录页（39 KB）
 
-  · 都是 artifacts/screenshots/forum-*.png（模拟器原始截图，1920x1080）转的 JPEG：
+  · 源图是 artifacts/screenshots/forum-*.jpg（模拟器截图，1920x1080），再压成这里的 JPEG：
     质量 84、渐进式、1920x1080，13 张共 2.1 MB。
   · 截图里的照片是 mock 服务器现在带的测试照片 —— 真照片，不是以前的渐变色块。
     来源与授权见 tools/mock-nas/assets/photos/CREDITS.md（Unsplash 授权，可自由使用）。

@@ -9,7 +9,7 @@ It talks to the fnOS photo gallery's own API — the same one the official app u
 so it gets the real timeline, albums, folders, server-side thumbnails, Live Photos
 and video streaming, rather than treating the NAS as a dumb file share.
 
-![Timeline](artifacts/screenshots/forum-01-timeline.png)
+![Timeline](artifacts/screenshots/forum-01-timeline.jpg)
 
 ## What it does
 
@@ -50,17 +50,17 @@ and video streaming, rather than treating the NAS as a dumb file share.
   bar; toggling the slideshow shows a brief notice that dismisses itself.
 - **A photo that has not arrived is not a black screen** — the viewer opens on a spinner
   and 加载中… until the first picture is decoded, and drops them the instant it is
-  (`140-viewer-loading.png`, `142-viewer-loaded.png`). Paging never needs them: the photo
+  (`140-viewer-loading.jpg`, `142-viewer-loaded.jpg`). Paging never needs them: the photo
   being left stays up until the next one is ready. The corner arrows are the other half of
   that rule — they report the user's own presses, never the show's own fetching.
 - **Background music under the slideshow** — **背景音乐**, after 播放顺序 in the
   same row, opens a list of tracks above itself: up/down walks them, OK ticks and
   unticks, Back closes the list with the focus back on the control it came from
-  (`121-music-list-open.png`, `124-music-both-ticked.png`). Nine tracks are catalogued —
+  (`121-music-list-open.jpg`, `124-music-both-ticked.jpg`). Nine tracks are catalogued —
   the list is taller than the room above the settings row, so it is capped at
   `MUSIC_LIST_MAX_HEIGHT` and scrolls itself to the cursor's row, which nothing else
   would do: the D-pad never touches those rows, the viewer's root box routes it
-  (`220-music-list-nine.png`, `221-music-scrolled.png`). The music starts with the
+  (`220-music-list-nine.jpg`, `221-music-scrolled.jpg`). The music starts with the
   show, plays the ticked tracks in the order they are listed, loops, and stops with the
   show. It is *held* rather than discarded in the two places something else has the
   room's attention: while the settings row is open, which holds the photo timer for
@@ -408,8 +408,8 @@ verification was built deliberately:
 
    That is how the paging queue and the deletion path were both confirmed on the
    emulator: with a slow original, queueing 55 page-turns leaves the picture on screen
-   with five arrows and a `+2` overflow in the corner (`91-arrows-queue.png`), and the
-   queued photo replaces it when it lands (`92-arrows-advanced.png`) — a black frame
+   with five arrows and a `+2` overflow in the corner (`91-arrows-queue.jpg`), and the
+   queued photo replaces it when it lands (`92-arrows-advanced.jpg`) — a black frame
    would have shown up in either. Uploading to the running slideshow moved the count in
    the information band from `4 / 16` to `4 / 17`, and deleting that same photo moved it
    back to `4 / 16` two polls later.
@@ -423,8 +423,8 @@ verification was built deliberately:
    The theme was toggled from **Settings → 主题** and then walked through: the settings
    screen, the timeline and a month grid in light (`110`–`113`), and the same app after a
    restart, which came back light because the window had been filled with the light
-   background before Compose drew (`131`); `138-settings-dark-restored.png` is the same
-   row switched back. The viewer stays dark in both modes (`114-viewer-light.png`) — it
+   background before Compose drew (`131`); `138-settings-dark-restored.jpg` is the same
+   row switched back. The viewer stays dark in both modes (`114-viewer-light.jpg`) — it
    is a surface over a photograph, not over the app. The music was walked the way a
    remote walks it: the list opening above the row (`121`), a tick (`122`), the same
    press taking it off again (`123`), both tracks ticked (`124`), the list closing with
@@ -442,7 +442,7 @@ verification was built deliberately:
    in `STATE_READY` — so the pause paths were read from the output thread instead: with
    the settings row open the thread drops to `0 active` tracks and standby, and returns
    to one active track when the row closes. The same measurement with the show parked on
-   a video (`136-slideshow-video.png`) also reads `0 active`, which is the only track
+   a video (`136-slideshow-video.jpg`) also reads `0 active`, which is the only track
    count that could be the music there — the mock's video carries no audio stream of its
    own (`soun` and `mp4a` boxes absent), so an active track on it could only have been
    the music. What is *not* waited out on a device is a full pass of two four-minute
@@ -454,8 +454,8 @@ verification was built deliberately:
    half a minute, which is the only way to see any of these. The black window is a spinner
    while that runs (`140`, `141`) and the picture replaces it with nothing left over
    (`142`). With the same delay and a show running, the corner is *empty* while the show's
-   own next photo is in flight (`143-slideshow-no-arrows.png`) and shows an arrow the
-   moment a key is pressed (`144-manual-press-arrows.png`) — one press, one arrow, from a
+   own next photo is in flight (`143-slideshow-no-arrows.jpg`) and shows an arrow the
+   moment a key is pressed (`144-manual-press-arrows.jpg`) — one press, one arrow, from a
    queue that held both. And with 顺序 set, stepping through a month whose clip sits at
    `4 / 16` reads `1 → 2 → 3 → 5 → 6 …`: the clip is walked over, and the position trace
    never once reads `VID_`. Stepping onto that clip by hand while the show runs does not

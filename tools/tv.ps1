@@ -4,7 +4,7 @@
   Usage:
     pwsh -File tools/tv.ps1 install
     pwsh -File tools/tv.ps1 launch
-    pwsh -File tools/tv.ps1 shot login
+    pwsh -File tools/tv.ps1 shot login      # -> artifacts/screenshots/login.jpg (JPEG, not PNG)
     pwsh -File tools/tv.ps1 key DPAD_DOWN DPAD_CENTER
     pwsh -File tools/tv.ps1 text "10.0.2.2"
     pwsh -File tools/tv.ps1 status
@@ -26,6 +26,31 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $adb = Join-Path $ToolchainRoot 'android-sdk\platform-tools\adb.exe'
 $shotDir = Join-Path $projectRoot 'artifacts\screenshots'
 New-Item -ItemType Directory -Force -Path $shotDir | Out-Null
+
+function Convert-ScreenshotToJpeg([string]$PngPath, [int]$Quality = 88) {
+  # adb can only screencap PNG, and a PNG of a photo app runs 1-3 MB per frame — the
+  # collection reached 119 MB before this. JPEG q88 is indistinguishable for these and
+  # about a fifth of the size. .NET rather than an image tool, so the helper keeps no
+  # dependency beyond Windows itself. Returns the .jpg path, or $null if it could not
+  # convert (in which case the PNG is left alone rather than lost).
+  try {
+    Add-Type -AssemblyName System.Drawing
+    $image = [System.Drawing.Image]::FromFile($PngPath)
+    try {
+      $encoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+        Where-Object { $_.MimeType -eq 'image/jpeg' } | Select-Object -First 1
+      $parameters = [System.Drawing.Imaging.EncoderParameters]::new(1)
+      $parameters.Param[0] = [System.Drawing.Imaging.EncoderParameter]::new(
+        [System.Drawing.Imaging.Encoder]::Quality, [int64]$Quality)
+      $jpg = [IO.Path]::ChangeExtension($PngPath, '.jpg')
+      $image.Save($jpg, $encoder, $parameters)
+      return $jpg
+    } finally { $image.Dispose() }
+  } catch {
+    Write-Host "  (JPEG conversion failed: $($_.Exception.Message))"
+    return $null
+  }
+}
 
 function Invoke-Adb([string[]]$AdbArgs, [switch]$Quiet) {
   # adb writes progress to stderr, which PowerShell 5.1 promotes to a terminating
@@ -72,11 +97,17 @@ switch ($Action) {
   'shot' {
     $name = if ($Rest.Count -gt 0) { $Rest[0] } else { 'shot' }
     $remote = "/sdcard/$name.png"
-    $local = Join-Path $shotDir "$name.png"
+    $png = Join-Path $shotDir "$name.png"
     Invoke-Adb @('shell', 'rm', '-f', $remote) | Out-Null
     Invoke-Adb @('shell', 'screencap', '-p', $remote) | Out-Null
-    Invoke-Adb @('pull', $remote, $local) | Out-Null
-    Write-Host "screenshot -> $local"
+    Invoke-Adb @('pull', $remote, $png) | Out-Null
+    $jpg = Convert-ScreenshotToJpeg $png
+    if ($jpg) {
+      Remove-Item -LiteralPath $png -Force
+      Write-Host "screenshot -> $jpg"
+    } else {
+      Write-Host "screenshot -> $png"
+    }
   }
 
   'key' {

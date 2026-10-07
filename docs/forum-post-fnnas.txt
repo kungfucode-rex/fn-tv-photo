@@ -105,17 +105,25 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
  发布前必须确认
 ══════════════════════════════════════════════════════════════
 
-  [ ] GitHub 仓库推上去了没有 —— 你正在推，推完自己点一下
-      https://github.com/fn-tv-photo 能打开就行（我这边查还是 404）。
-  [ ] APK 怎么给：release 包现在 **68 MB**（9 首内置音乐占了 54 MB），
+  [x] GitHub 仓库已上线：https://github.com/kungfucode-rex/fn-tv-photo
+      （原先这里写的是 https://github.com/fn-tv-photo，那个地址不存在。）
+  [x] Release v1.2 已发布，APK 挂在上面：
+      https://github.com/kungfucode-rex/fn-tv-photo/releases/download/v1.2/app-release.apk
+      68,897,839 字节，SHA-256 6D07CF86…CCE6A37。已从 Release 下载回来比对过，
+      与本地构建的包逐字节一致。
+      注意：这台机器连不上 github.com（TCP 443 超时），api.github.com 和资源域名正常。
+      发帖前如果还是这样，Release 页面自己打不开是正常的，别人不一定；真不行就先挂网盘。
+  [ ] APK 怎么给：release 包现在 **66 MiB**（9 首内置音乐占了 54 MiB），
       论坛附件的单文件上限多半放不下，先看一眼「附件」按钮旁边写的限制：
-        · 放得下 → 直接传附件，正文那一行不用改；
-        · 放不下 → 传 GitHub Releases / 网盘，把正文「本帖附件 app-release.apk」换成下载链接。
+        · 放得下 → 再传一份附件；
+        · 放不下 → 正文里已经有 Release 链接了，直接用那个。
   [ ] 内置的那 9 首（李志辉、王先宏、唐艺……）是商业录音，随 APK 公开分发有版权风险。
       要么只留可自由分发的曲目重新打包，要么在帖子里说明音乐只是随包附带、请自行替换。
   [ ] 发在「应用分享」板块（fid=12），发错板块会被版主移走。
   [ ] 论坛有《应用分享 板块发帖指南》(tid=59034)，发帖前扫一眼有没有额外要求
       （标题格式、必须附截图、是否要求说明收费 / 安全等）。
-  [ ] 包名已经改成 com.kungfucode.fntvphoto（新包已构建：app/build/outputs/apk/release/app-release.apk，
-      也已发布到 \\fnos-ms01\Temp\软件\app-release-20261007-183653.apk）。对 Android 来说这是一个新应用，
-      和旧的 com.tvphoto 是两个 App，会各自出现一个图标；装了旧的先卸载。
+  [x] 应用名已从 TV Photo 改成 FN Photo（桌面图标名、登录页标题、设置页的那行版本号，
+      以及登录时上报给 NAS 的设备名），版本号随之升到 1.2 / versionCode 3。
+      新包：app/build/outputs/apk/release/app-release.apk（未发到 \\fnos-ms01\Temp\软件）。
+      包名仍是 com.kungfucode.fntvphoto —— 对 Android 来说它和旧的 com.tvphoto 是两个 App，
+      会各自出现一个图标；装了旧的先卸载。

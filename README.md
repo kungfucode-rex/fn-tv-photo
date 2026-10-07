@@ -6,7 +6,7 @@
 
 它对接的是飞牛相册自己的接口 —— 也就是官方 App 用的那一套 —— 所以拿到的是真正的时间线、相册、文件夹、服务端缩略图、Live Photo 和视频串流，而不是把 NAS 当成一个笨拙的文件共享。
 
-![时间线](artifacts/screenshots/forum-01-timeline.jpg)
+![时间线](artifacts/forum/1-timeline.jpg)
 
 ## 界面一览
 
@@ -176,7 +176,7 @@ docs/fnos-photo-api.md   逆向出来的协议，附证据
    ```
 
    它已经抓到过 mock 自身的一个真实 bug（编码后的候选中多带了一个客户端并不会签名的前导 `?`）。
-3. **在 Android TV 模拟器上跑真机** —— 每个屏幕和遥控器动作都对着 mock 走了一遍，截图在 `artifacts/screenshots/`。
+3. **在 Android TV 模拟器上跑真机** —— 每个屏幕和遥控器动作都对着 mock 走了一遍，截图留在本地 `artifacts/screenshots/`（**未入库**，重跑一遍应用即可再生成）。
 4. **协商签名测试** —— 把 mock 固定到客户端**不会**一开始采用的那条规则，请求被拒绝，客户端翻转规则、重试、成功，并持久化该选择。通过读服务器计数器和应用存储的偏好两处确认。
 5. **地址归一化的单元测试**：`pwsh -File tools/build.ps1 -Tasks testDebugUnitTest`。它们抓到过一个真实 bug：`trimEnd('/')` 把 `http://` 变成了 `http:`。
 6. **mock 上针对时序相关行为的开关** —— 一个“下一张下载期间保持当前照片”的查看器没法靠读代码来检查，而在局域网上等待又短到看不见。`__control/slow-media?ms=12000&sizes=o` 让原图晚十二秒到达，`__control/delete-photo?id=N` 像主持人整理聚会相册那样删掉一张照片。两者都不改变协议长什么样 —— 只改变它花多久，以及下一次读库时里面有什么。

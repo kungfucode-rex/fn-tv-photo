@@ -9,7 +9,7 @@ It talks to the fnOS photo gallery's own API — the same one the official app u
 so it gets the real timeline, albums, folders, server-side thumbnails, Live Photos
 and video streaming, rather than treating the NAS as a dumb file share.
 
-![Timeline](artifacts/screenshots/forum-01-timeline.jpg)
+![Timeline](artifacts/forum/1-timeline.jpg)
 
 ## Screenshots
 
@@ -402,7 +402,8 @@ verification was built deliberately:
    It already caught one real bug in the mock itself (the encoded candidate included
    a leading `?` that clients do not sign).
 3. **On-device runs on an Android TV emulator** — every screen and remote action was
-   exercised against the mock, with screenshots in `artifacts/screenshots/`.
+   exercised against the mock, with screenshots kept locally in
+   `artifacts/screenshots/` (**not committed**; re-running the app regenerates them).
 4. **A negotiated-signature test** — with the mock pinned to the rule the client does
    *not* start on, requests are rejected, the client flips rule, retries, succeeds and
    persists the choice. Confirmed by reading both the server counters and the app's

@@ -1,6 +1,6 @@
 # fnOS photo API — reverse-engineered protocol notes
 
-These notes describe the private fnOS (飞牛) photo-gallery protocol that **TV Photo**
+These notes describe the private fnOS (飞牛) photo-gallery protocol that **FN Photo**
 speaks, and record how each part was verified. Nothing here is officially
 documented; it was reconstructed from working clients and then checked against a
 mock server that actually enforces the rules.
@@ -54,7 +54,7 @@ HTTPS on 5667 by default).
      "password": "…",
      "stay": true,
      "deviceType": "AndroidTV",
-     "deviceName": "TV Photo",
+     "deviceName": "FN Photo",
      "did": "<24 chars>"
    }
    ```
@@ -188,7 +188,7 @@ immediately because of its `YYYY:MM:DD HH:MM:SS` format. Parameterless requests
 hash the empty string under both rules, so the difference is invisible there — a
 detail worth knowing before concluding "both work".
 
-**TV Photo resolves this by negotiating.** It starts on `RAW_VALUES`; if the server
+**FN Photo resolves this by negotiating.** It starts on `RAW_VALUES`; if the server
 answers with business code `5000`, it flips to the other rule, replays the request
 and persists whichever worked. The settings screen can also pin the mode manually.
 

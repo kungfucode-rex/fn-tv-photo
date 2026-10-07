@@ -159,7 +159,7 @@ class FnAuthClient(private val httpClient: OkHttpClient) {
         const val REQ_RSA_PUB = "util.crypto.getRSAPub"
         const val REQ_LOGIN = "user.login"
         const val DEVICE_TYPE = "AndroidTV"
-        const val DEVICE_NAME = "TV Photo"
+        const val DEVICE_NAME = "FN Photo"
     }
 }
 

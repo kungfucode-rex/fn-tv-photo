@@ -19,10 +19,11 @@ android {
         applicationId = "com.kungfucode.fntvphoto"
         minSdk = 23
         targetSdk = 36
-        // Bumped when the launcher entry was added: the phone has to be able to
-        // tell the fixed build apart from the earlier one that had no icon.
-        versionCode = 2
-        versionName = "1.1"
+        // Bumped when the launcher label, the login title and the settings header all
+        // moved from TV Photo to FN Photo, so a TV still showing the old name can be
+        // told apart from the build that carries the new one.
+        versionCode = 3
+        versionName = "1.2"
     }
 
     androidResources {

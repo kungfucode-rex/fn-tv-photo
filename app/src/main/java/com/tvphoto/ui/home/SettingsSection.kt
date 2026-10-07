@@ -91,7 +91,7 @@ fun SettingsSection(viewModel: MainViewModel) {
         )
         InfoRow(
             label = stringResource(R.string.settings_version),
-            value = "TV Photo ${BuildConfig.VERSION_NAME}",
+            value = "FN Photo ${BuildConfig.VERSION_NAME}",
         )
 
         // Read once per visit: it cannot change while the process lives, and the one

@@ -1,5 +1,5 @@
 <#
-  Provisions a self-contained Android build toolchain for the TV Photo project.
+  Provisions a self-contained Android build toolchain for the FN Photo project.
   Everything lands under -Root (default F:\android-toolchain) so nothing is
   installed system-wide and the whole thing can be deleted in one step.
 #>

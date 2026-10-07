@@ -1,4 +1,4 @@
-# TV Photo
+# FN Photo
 
 **English** | [简体中文](README.md)
 

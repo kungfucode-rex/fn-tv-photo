@@ -1,7 +1,7 @@
 'use strict';
 
 /*
- * Mock fnOS server for verifying the TV Photo client end to end.
+ * Mock fnOS server for verifying the FN Photo client end to end.
  *
  * Unlike the mock shipped with the reference project, this one actually VERIFIES
  * the `authx` signature and the `si` field type. That matters because the two

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">TV Photo</string>
+    <string name="app_name">FN Photo</string>
 
     <!-- Login -->
-    <string name="login_title">TV Photo</string>
+    <string name="login_title">FN Photo</string>
     <string name="login_subtitle">Connect to your fnOS NAS</string>
     <string name="login_host">Server address</string>
     <string name="login_host_hint">https://192.168.1.10:5667 (HTTPS only)</string>

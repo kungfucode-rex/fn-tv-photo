@@ -148,6 +148,14 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     var videoPlaying by remember { mutableStateOf(true) }
     var showInfo by remember { mutableStateOf(false) }
 
+    // Bumped when a queued photo is given up rather than shown.
+    //
+    // The show's interval is keyed on the photo on screen, so an arrival is what starts
+    // the next one. A step that is taken back never arrives, so without this the timer
+    // would have nothing left to run and a show somebody pressed left in the middle of
+    // would sit there for good.
+    var slideshowResume by remember { mutableIntStateOf(0) }
+
     // Where the photo on screen last sat. Used when that photo is deleted out from under
     // the viewer: the photo that slid into its place is the least jarring replacement,
     // and falling back to the top of the list would jump the show back to the newest.
@@ -233,6 +241,14 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     }
 
     /**
+     * Starts the show's interval again when a step left the queue without a photo
+     * arriving to start it — see [slideshowResume].
+     */
+    fun resumeSlideshowIfIdle() {
+        if (slideshowRunning && pending.isEmpty()) slideshowResume++
+    }
+
+    /**
      * Walks the paging pointer one step in [delta]'s direction.
      *
      * Left and right move a *pointer* along the list rather than appending to a queue.
@@ -261,6 +277,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
             val dropped = pending.last()
             pending = pending.dropLast(1)
             slideshowQueued = slideshowQueued - dropped
+            resumeSlideshowIfIdle()
         }
     }
 
@@ -345,6 +362,9 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         if (pending.any { it !in present }) {
             pending = pending.filter { it in present }
             slideshowQueued = slideshowQueued.filterTo(HashSet()) { it in present }
+            // A queued photo the library no longer lists is a step that will never
+            // arrive either, so the show needs its interval back here too.
+            resumeSlideshowIfIdle()
         }
 
         if (layerIds.any { it != null && it !in present }) {
@@ -378,6 +398,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         current.isVideo,
         slideshowShuffled,
         menuOpen,
+        slideshowResume,
     ) {
         if (slideshowRunning && items.size > 1 && !menuOpen) {
             delay(slideshowSeconds * 1000L)
@@ -983,8 +1004,13 @@ private fun MusicTrackList(
     val shape = RoundedCornerShape(12.dp)
     val listState = rememberLazyListState()
 
+    // Only when the cursor's row is not already on screen: scrolling on every move would
+    // slide the whole list under a cursor that had not left the visible part of it. The
+    // viewport is empty on the first pass, which is what puts the opening cursor — the
+    // first ticked track — in view.
     LaunchedEffect(cursor) {
-        runCatching { listState.animateScrollToItem(cursor.coerceAtLeast(0)) }
+        val onScreen = listState.layoutInfo.visibleItemsInfo.any { it.index == cursor }
+        if (!onScreen) runCatching { listState.animateScrollToItem(cursor.coerceAtLeast(0)) }
     }
 
     Column(

@@ -15,7 +15,9 @@ param(
   [Parameter(Position = 0)][string]$Action = 'status',
   [Parameter(Position = 1)][string[]]$Rest = @(),
   [string]$ToolchainRoot = 'F:\android-toolchain',
-  [string]$AppId = 'com.tvphoto.debug',
+  # The packaged id, not the code namespace: applicationId carries the author's own
+  # prefix while the classes stay under com.tvphoto (see app/build.gradle.kts).
+  [string]$AppId = 'com.kungfucode.fntvphoto.debug',
   [string]$Activity = 'com.tvphoto.MainActivity'
 )
 

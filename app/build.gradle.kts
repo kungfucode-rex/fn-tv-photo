@@ -11,7 +11,12 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.tvphoto"
+        // The id an install is known by, and the one a forum post quotes. It carries
+        // the author's own prefix; `namespace` stays com.tvphoto, which is where the
+        // code and the R/BuildConfig classes live, so only the packaged id moves. A
+        // new id is a different app to Android: it installs *beside* the old one and
+        // starts from empty settings.
+        applicationId = "com.kungfucode.fntvphoto"
         minSdk = 23
         targetSdk = 36
         // Bumped when the launcher entry was added: the phone has to be able to

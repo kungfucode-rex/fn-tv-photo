@@ -54,30 +54,37 @@ and video streaming, rather than treating the NAS as a dumb file share.
 - **Background music under the slideshow** — **背景音乐**, after 播放顺序 in the
   same row, opens a list of tracks above itself: up/down walks them, OK ticks and
   unticks, Back closes the list with the focus back on the control it came from
-  (`121-music-list-open.png`, `124-music-both-ticked.png`). The music starts with the
+  (`121-music-list-open.png`, `124-music-both-ticked.png`). Nine tracks are catalogued —
+  the list is taller than the room above the settings row, so it is capped at
+  `MUSIC_LIST_MAX_HEIGHT` and scrolls itself to the cursor's row, which nothing else
+  would do: the D-pad never touches those rows, the viewer's root box routes it
+  (`220-music-list-nine.png`, `221-music-scrolled.png`). The music starts with the
   show, plays the ticked tracks in the order they are listed, loops, and stops with the
   show. It is *held* rather than discarded in the two places something else has the
   room's attention: while the settings row is open, which holds the photo timer for
   exactly the same reason, and while a video is on screen, which plays its own audio.
-  Leaving the viewer ends it. The tracks travel inside the APK (8.5 MB of it) instead of
-  being fetched from the NAS, because a soundtrack has to start with the show: a track
-  that had to be authenticated and buffered first would put silence in front of every
-  one.
+  Leaving the viewer ends it. The tracks travel inside the APK (54 MB of it, the price of
+  a catalogue that is mostly full-length Chinese pieces) instead of being fetched from the
+  NAS, because a soundtrack has to start with the show: a track that had to be
+  authenticated and buffered first would put silence in front of every one.
 - **Dark or light** — **Settings → 主题** switches the whole app and remembers the
   answer. Dark stays the default, and the one a photo browser in a dim room wants; light
   is there because a bright room turns a dark UI into a mirror, and a TV is not always
   the only thing being looked at. The window is filled with the chosen background before
   Compose draws its first frame, so a light-mode launch does not flash black first
   (`110`–`113`, `131`).
-- **Paging never blanks the screen.** A page turn is a *queue*, not a jump: pressing
-  right puts the next photo in the queue and, until it has actually been downloaded and
-  decoded, the photo on screen stays exactly where it is and a row of breathing arrows
-  appears in the bottom-right corner — one per photo still queued, so three presses
-  right read as three photos, and left likewise. The moment the queued photo is ready it
-  becomes the photo on screen, in place of the one before it, with no black frame in
-  between. Two image layers sit under the viewer at all times and a page turn only
-  changes which one is opaque, because changing the *model* of the visible one is what
-  used to blank the screen while the new photo downloaded.
+- **Paging never blanks the screen.** A page turn walks a *pointer* rather than jumping:
+  pressing right asks for the next photo, and until it has actually been downloaded and
+  decoded the photo on screen stays exactly where it is while a row of breathing arrows
+  appears in the bottom-right corner — one per photo between the photo on screen and where
+  the pointer now is, so three presses right read as three photos. Left gives a step back
+  instead of queueing a photo the other way: right-then-left leaves nothing queued at all,
+  which is what a pointer that returned to where it started should look like
+  (`214`–`219`). The moment the queued photo is ready it becomes the photo on screen, in
+  place of the one before it, with no black frame in between. Two image layers sit under
+  the viewer at all times and a page turn only changes which one is opaque, because
+  changing the *model* of the visible one is what used to blank the screen while the new
+  photo downloaded.
 - **A deletion leaves the show.** The 30 s re-read is compared with the list the
   slideshow is walking, and a photo the page no longer lists is dropped from the
   rotation instead of staying on screen as a picture that is no longer in the library.
@@ -93,8 +100,15 @@ and video streaming, rather than treating the NAS as a dumb file share.
   certificate trust, so against a NAS whose certificate is only pinned it fails** — see
   *Known limitations*.
 - **Fast viewing** — the cache is kept warm for the next 50 full-size originals
-  *starting from the photo you are on*, so paging forward is what gets accelerated.
-  Media requests also run eight-at-a-time rather than OkHttp's default five, because the
+  *starting from the photo you are on*, so paging forward is what gets accelerated. That
+  window stands down completely while the viewer is waiting for a picture of its own —
+  the one on screen, or the one a page turn just asked for — because a prefetch shares
+  the client and the wire with the photo being looked at, and warming something nobody
+  has opened yet must never be what makes that photo late. Measured on the emulator with
+  originals delayed by 12 s and a cold cache, the two seconds after the viewer opened
+  carried **one** original request with the window held and **five** without it; once the
+  photo landed the window resumed on its own (`211`–`213`). Media requests also run
+  eight-at-a-time rather than OkHttp's default five, because the
   prefetcher and the thumbnails on screen share one client: with five, the pictures the
   user is looking at queued behind full-size originals nobody had asked for yet, which
   reads on a TV as the grid stuttering as focus moves.
@@ -175,12 +189,15 @@ disk cache and nothing else: the app runs memory-only, and says so in the log.
 | Back | up one level | close the slideshow row if it is open, otherwise leave the viewer |
 | Back ×2 | exit the app (from the top level) | — |
 
-Paging is queued rather than immediate, so ← / → show what is on its way: arrows in the
-bottom-right corner, one per photo still queued, breathing while they wait. Nothing about
-the list moves until the queued photo is ready; then it becomes the photo on screen.
+Paging walks a pointer rather than jumping, so ← / → show where it has got to: arrows in
+the bottom-right corner — pointing the way the pointer was walked, one per photo between
+it and the photo on screen — breathing while they wait. Left takes a step back rather than
+queueing the photo behind, so right-then-left reads as nothing queued, which is what a
+pointer back where it started is. Nothing about the list moves until the queued photo is
+ready; then it becomes the photo on screen, and the arrows count down with it.
 
 **The arrows are for the user's own presses.** A running slideshow fetches its next
-picture through the same queue, and reporting that would put code on screen that nobody
+picture through the same walk, and reporting that would put code on screen that nobody
 typed — so the queue remembers which of its entries the show asked for and counts only
 the rest. Press ← or → during a show and the arrow is back, because that one *was* typed.
 
@@ -210,7 +227,9 @@ may never play.
 — or either arrow — opens the list of tracks above the row, where up/down walks the
 tracks, OK ticks and unticks (applied at once; the tick is the confirmation), and Back
 closes the list and puts the focus back on the control it came from. Left/right and the
-photo keys do nothing while the list is up, so nothing moves underneath it.
+photo keys do nothing while the list is up, so nothing moves underneath it. The list
+scrolls to the row the cursor is on, since the catalogue is taller than the room above the
+row and none of these rows is focusable.
 
 **Setting controls all take one shape** — the slideshow row is the reference. A pill
 reads `label · value · ▲▼`, with the label on the left and the arrows on the right of
@@ -285,7 +304,9 @@ keytool -genkeypair -v -keystore app/tvphoto.jks -alias tvphoto `
 ```
 
 For a debug build use `tools/build.ps1 -Tasks assembleDebug` and install
-`app-debug.apk`; note its application id is `com.tvphoto.debug`.
+`app-debug.apk`; note its application id is `com.kungfucode.fntvphoto.debug` (the
+release one is `com.kungfucode.fntvphoto`; the code namespace is `com.tvphoto` either
+way, which is why `tools/tv.ps1` names the activity as `com.tvphoto.MainActivity`).
 
 The same APK also installs on a phone, with a normal desktop icon. `MainActivity`
 declares `LEANBACK_LAUNCHER` for the Android TV home screen *and* the plain
@@ -316,7 +337,7 @@ app/src/main/java/com/tvphoto/
     login/ home/ gallery/ viewer/   screens
     components/Spinner.kt   the drawn arc, shared by start-up and by the viewer
     MainViewModel.kt  navigation stack + per-section state
-app/src/main/assets/music/   the two tracks a slideshow can play
+app/src/main/assets/music/   the nine tracks a slideshow can play
 tools/
   build.ps1           Gradle wrapper with the local toolchain; publishes the APK
   publish-apk.ps1     copies a built APK to \\fnos-ms01\Temp\软件 and verifies it
@@ -425,6 +446,27 @@ verification was built deliberately:
    stall it either — it gets one interval and the show is on the next picture.
    `SlideshowOrderTest` pins the same rules off the device, over every seed for the
    shuffled draw.
+9. **The paging pointer, the prefetch window and the nine-track catalogue** — the three
+   changes that only exist on screen. `__control/slow-media?ms=12000&sizes=o` with the
+   image cache emptied puts the pointer walk somewhere a screenshot can catch it:
+   one press right is one right arrow (`214`), the next press left takes that step back
+   and leaves the corner *empty* (`215`), and only the press after that puts a left arrow
+   up (`216`) — the old queue read that second press as two leftwards arrows. Repeating it
+   both ways counts down and cancels out as a pointer should (`217`–`219`).
+   The prefetch's new hold was measured rather than eyeballed, by reading the mock's
+   request log: in the two seconds after the viewer opened on a cold cache it carried
+   **one** original — the photo on screen — where the same build with `hold = { false }`
+   sent **five**, the visible photo twice over plus three prefetches (`/__control/media`).
+   Fourteen seconds later, with the photo landed, the window had resumed on its own (five
+   originals, `213`). The music list was walked with nine tracks in it: it opens on the
+   ticked row (`220`), scrolls itself to the last one (`221`), ticks it (`223`) and takes
+   the ticks off the two that shipped before (`224`). That last state — exactly one track
+   ticked, one of the new seven — was then played, and read off the device the way item 7
+   reads the audio: `media.audio_flinger` reports `1 Tracks of which 1 are active` for
+   `com.tvphoto.debug` with `Standby: no`, and the log carries `ExoPlayerImpl`'s init and
+   an audio `MediaCodec` being built for it, with nothing about a missing asset.
+   `SlideshowMusicTest` is what keeps the catalogue honest off the device: it fails the
+   build if any of the nine names a file the APK does not carry.
 
 Two bugs were found only by testing the way a user actually would:
 

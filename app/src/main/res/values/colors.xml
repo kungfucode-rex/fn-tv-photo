@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The plate behind the icon artwork. Named for the adaptive icon that consumes
+      it, and kept as a color rather than a drawable so the launcher tints nothing
+      and no vector is rasterised twice.
+    -->
+    <color name="ic_launcher_background">#101826</color>
+</resources>

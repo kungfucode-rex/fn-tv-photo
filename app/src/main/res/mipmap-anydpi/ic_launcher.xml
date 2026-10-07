@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The icon an API 23-25 home screen loads (minSdk is 23; adaptive icons start at 26).
+
+  A layer-list of plate + artwork rather than a second copy of the picture, so the
+  paths live in exactly one file, drawable/app_icon_foreground.xml. The explicit
+  size is what gives this drawable an intrinsic width: a layer-list whose only
+  children are a color and a vector would otherwise report none, and a launcher
+  that asks before it sets bounds would get a 48dp guess.
+
+  android:width/android:height on a drawable XML arrive in API 23, which is this
+  app's floor, so there is no lower API left to serve.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp">
+
+    <item android:drawable="@color/ic_launcher_background" />
+    <item android:drawable="@drawable/app_icon_foreground" />
+</layer-list>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The icon artwork: one sun, two ridges, nothing else.
+
+  It is deliberately this short. The previous icon stacked a plate, a card, a sun
+  and two overlapping mountains inside 108dp, which turned to mud at the 48dp a
+  TV's 我的应用 list draws. Three marks survive the shrink: the sun reads as the
+  light source, the light ridge as the far mountain, the dark ridge as the near
+  one.
+
+  The ridges run to the bottom edge on purpose. Launchers on API 26+ crop the
+  outer 18dp of an adaptive icon under whatever mask the home screen uses
+  (circle, squircle, rounded square), and a landscape that bleeds off the bottom
+  edge crops gracefully under all of them; a framed one would not. The sun sits
+  inside the 66dp safe circle, so no mask can clip it.
+
+  Colors are the app's own: the dark navy plate and the amber sun that the login
+  screen and the settings header already use, and the two teal tones of the
+  banner (drawable/app_banner.xml), so the icon and the TV banner stay one family.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- sun, clear of both ridgelines -->
+    <path
+        android:fillColor="#FFC24B"
+        android:pathData="M72,30m-12,0a12,12 0 1,0 24,0a12,12 0 1,0 -24,0" />
+
+    <!-- far ridge -->
+    <path
+        android:fillColor="#35C4A0"
+        android:pathData="M30,108L60,44L90,108Z" />
+
+    <!-- near ridge, one tone down so the two read apart at 48dp -->
+    <path
+        android:fillColor="#2A9E84"
+        android:pathData="M2,108L36,60L70,108Z" />
+</vector>

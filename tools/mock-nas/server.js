@@ -242,6 +242,54 @@ function hslToRgb(h, s, l) {
 
 const SIZE_MAP = { xxs: [107, 60], xs: [320, 180], s: [427, 240], m: [960, 540], o: [1280, 720] };
 
+/**
+ * Bundled test photographs, fetched by `fetch-photos.js`.
+ *
+ * The painted gradient below is what this server shipped with, and it is fine for
+ * asserting that a thumbnail arrived — but every screenshot of the app then looks
+ * like a wall of gradients, which is not something to put in a README or a forum
+ * post. `assets/photos/<picsum id>/{xxs,xs,s,m,o,face}.jpg` are real photographs at
+ * exactly the pixel sizes advertised in SIZE_MAP, so the bytes on the wire are the
+ * ones a real server would send for that size.
+ *
+ * An id is mapped to a photo by `id % count`: stable across restarts, and still
+ * defined for the ids `/__control/add-photo` invents after the seed. Anything
+ * missing — no catalogue at all, or a half-fetched directory — falls back to the
+ * gradient rather than serving a broken tile.
+ */
+const PHOTO_DIR = path.join(__dirname, 'assets', 'photos');
+const photoCatalogue = (() => {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(PHOTO_DIR, 'manifest.json'), 'utf8'));
+    const usable = (manifest.photos || []).filter((p) => fs.existsSync(path.join(PHOTO_DIR, String(p.id), 'o.jpg')));
+    console.log(
+      usable.length
+        ? `  Photos : ${usable.length} real photographs (${manifest.licence || 'see assets/photos/CREDITS.md'})`
+        : '  Photos : catalogue is empty, painting gradients instead',
+    );
+    return usable;
+  } catch {
+    console.log('  Photos : no assets/photos/manifest.json, painting gradients instead');
+    return [];
+  }
+})();
+
+const photoFileCache = new Map();
+
+/** The bytes for one rendition, or null when that photo (or size) is not bundled. */
+function testPhoto(id, rendition) {
+  if (!photoCatalogue.length) return null;
+  const n = photoCatalogue.length;
+  const entry = photoCatalogue[((id % n) + n) % n];
+  const key = `${entry.id}:${rendition}`;
+  const cached = photoFileCache.get(key);
+  if (cached !== undefined) return cached;
+  const file = path.join(PHOTO_DIR, String(entry.id), `${rendition}.jpg`);
+  const bytes = fs.existsSync(file) ? fs.readFileSync(file) : null;
+  photoFileCache.set(key, bytes);
+  return bytes;
+}
+
 // -------------------------------------------------------------------- data
 const uuid = (n) => `${n.toString(16).padStart(8, '0')}-mock-4000-8000-000000000000`;
 
@@ -472,11 +520,17 @@ function serveMedia(req, res, url) {
   if (streamMatch) {
     const id = Number(streamMatch[1]);
     const size = streamMatch[2];
+    const known = Object.prototype.hasOwnProperty.call(SIZE_MAP, size);
     const [w, h] = SIZE_MAP[size] || SIZE_MAP.m;
-    const png = renderPng(id, w, h);
+    const jpeg = testPhoto(id, known ? size : 'm');
+    const body = jpeg || renderPng(id, w, h);
     const send = () => {
-      res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'max-age=600' });
-      res.end(png);
+      res.writeHead(200, {
+        'Content-Type': jpeg ? 'image/jpeg' : 'image/png',
+        'Content-Length': body.length,
+        'Cache-Control': 'max-age=600',
+      });
+      res.end(body);
     };
     // An artificially slow original is how the viewer's paging is tested: with a
     // three-second photo, "the previous picture stays up with an arrow in the corner"
@@ -489,6 +543,13 @@ function serveMedia(req, res, url) {
 
   const faceMatch = /^\/p\/api\/v1\/stream\/face\/(\d+)$/.exec(url.pathname);
   if (faceMatch) {
+    // A square crop of a real photograph, not a face: the mock has no face detector,
+    // and the 人物 section only needs a round avatar that is not a gradient.
+    const jpeg = testPhoto(Number(faceMatch[1]), 'face');
+    if (jpeg) {
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': jpeg.length, 'Cache-Control': 'max-age=600' });
+      return res.end(jpeg);
+    }
     const png = renderPng(Number(faceMatch[1]), 240, 240);
     res.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': png.length, 'Cache-Control': 'max-age=600' });
     return res.end(png);

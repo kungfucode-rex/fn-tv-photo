@@ -1,261 +1,90 @@
 # TV Photo
 
-An Android TV app for browsing a photo library stored on a **飞牛 fnOS** NAS, driven
-entirely by the TV remote.
+[English](README.en.md) | **简体中文**
 
-It talks to the fnOS photo gallery's own API — the same one the official app uses —
-so it gets the real timeline, albums, folders, server-side thumbnails, Live Photos
-and video streaming, rather than treating the NAS as a dumb file share.
+一个跑在 Android TV 上、完全用遥控器操作的相册应用，用来浏览存放在**飞牛 fnOS** NAS 上的照片库。
 
-![Timeline](artifacts/screenshots/22-autologin-restart.png)
+它对接的是飞牛相册自己的接口 —— 也就是官方 App 用的那一套 —— 所以拿到的是真正的时间线、相册、文件夹、服务端缩略图、Live Photo 和视频串流，而不是把 NAS 当成一个笨拙的文件共享。
 
-## What it does
+![时间线](artifacts/screenshots/22-autologin-restart.png)
 
-- **我的照片 (the timeline)** — **one row per year, that year's months across it**. A row
-  opens with the year, then a card per month: the month above, that month's first photo
-  below. Months with no photos get no card. Left/right walks the months of a year, up/down
-  moves between years, so a decade of library is a few dense rows instead of a
-  screenful of near-empty year bars.
-- **我的相册 (albums)** — user-created albums with covers and photo/video counts.
-- **他人分享相册 (shared with me)** — albums other accounts on the NAS have shared
-  with you, each card naming the account it came from. A route of its own
-  (`album_grant/list_to_me`), not a filter on your own album list. An empty list is a
-  normal state — it means nobody has shared one — so it says so rather than offering a
-  retry.
-- **People** — face clusters from the gallery's on-device AI, with circular face
-  avatars. Hidden clusters are filtered out. An empty list is a normal state (AI
-  indexing off), so it explains that instead of offering a retry.
-- **Folders** — the folders the gallery app manages, with drill-down into
-  subfolders and their media.
-- **Party mode** — a running slideshow re-reads the album every **30 s**, so a picture a
-  colleague sends to the album joins the rotation without anyone touching the remote,
-  and one the host deletes leaves it. Arrivals are appended rather than re-sorted into
-  their newest-first position: the show walks the list by index, so re-sorting would
-  swap the photo on screen mid-display, and appending means each arrival is shown once
-  per pass rather than being skipped as already passed. A photo that is no longer in the
-  freshly-read page is dropped — see **A deletion leaves the show** below for how much
-  one page can be trusted to say.
-- **Fresh on entry** — selecting a section, and opening a photo grid, re-checks the
-  list behind it, so an album someone shares with the account or a photo uploaded to
-  the NAS turns up without restarting the app. Whatever is already on screen stays up
-  while that runs: a re-check never blanks it, and a failed one never replaces working
-  data with an error. A month whose photo count has moved also drops its cached cover.
-- **Full-screen viewer** — fit-to-screen photos, left/right paging, an information
-  band, and a slideshow. The band's corner button opens slideshow controls — play,
-  interval, order (顺序/随机) and background music — without leaving the photo. The show
-  itself walks photos only: a clip in the rotation would stop the advance and talk over
-  the music, so videos are looked past in either order. No permanent on-screen shortcut
-  bar; toggling the slideshow shows a brief notice that dismisses itself.
-- **A photo that has not arrived is not a black screen** — the viewer opens on a spinner
-  and 加载中… until the first picture is decoded, and drops them the instant it is
-  (`140-viewer-loading.png`, `142-viewer-loaded.png`). Paging never needs them: the photo
-  being left stays up until the next one is ready. The corner arrows are the other half of
-  that rule — they report the user's own presses, never the show's own fetching.
-- **Background music under the slideshow** — **背景音乐**, after 播放顺序 in the
-  same row, opens a list of tracks above itself: up/down walks them, OK ticks and
-  unticks, Back closes the list with the focus back on the control it came from
-  (`121-music-list-open.png`, `124-music-both-ticked.png`). Nine tracks are catalogued —
-  the list is taller than the room above the settings row, so it is capped at
-  `MUSIC_LIST_MAX_HEIGHT` and scrolls itself to the cursor's row, which nothing else
-  would do: the D-pad never touches those rows, the viewer's root box routes it
-  (`220-music-list-nine.png`, `221-music-scrolled.png`). The music starts with the
-  show, plays the ticked tracks in the order they are listed, loops, and stops with the
-  show. It is *held* rather than discarded in the two places something else has the
-  room's attention: while the settings row is open, which holds the photo timer for
-  exactly the same reason, and while a video is on screen, which plays its own audio.
-  Leaving the viewer ends it. The tracks travel inside the APK (54 MB of it, the price of
-  a catalogue that is mostly full-length Chinese pieces) instead of being fetched from the
-  NAS, because a soundtrack has to start with the show: a track that had to be
-  authenticated and buffered first would put silence in front of every one.
-- **Dark or light** — **Settings → 主题** switches the whole app and remembers the
-  answer. Dark stays the default, and the one a photo browser in a dim room wants; light
-  is there because a bright room turns a dark UI into a mirror, and a TV is not always
-  the only thing being looked at. The window is filled with the chosen background before
-  Compose draws its first frame, so a light-mode launch does not flash black first
-  (`110`–`113`, `131`).
-- **Paging never blanks the screen.** A page turn walks a *pointer* rather than jumping:
-  pressing right asks for the next photo, and until it has actually been downloaded and
-  decoded the photo on screen stays exactly where it is while a row of breathing arrows
-  appears in the bottom-right corner — one per photo between the photo on screen and where
-  the pointer now is, so three presses right read as three photos. Left gives a step back
-  instead of queueing a photo the other way: right-then-left leaves nothing queued at all,
-  which is what a pointer that returned to where it started should look like
-  (`214`–`219`). The moment the queued photo is ready it becomes the photo on screen, in
-  place of the one before it, with no black frame in between. Two image layers sit under
-  the viewer at all times and a page turn only changes which one is opaque, because
-  changing the *model* of the visible one is what used to blank the screen while the new
-  photo downloaded.
-- **A deletion leaves the show.** The 30 s re-read is compared with the list the
-  slideshow is walking, and a photo the page no longer lists is dropped from the
-  rotation instead of staying on screen as a picture that is no longer in the library.
-  How much a single page can prove is read from the page itself: one that did not fill
-  up reached the end of the album and speaks for all of it, while a full page only
-  covers its own window — and anything the show appended itself is by construction among
-  the newest photos, so its absence is conclusive even past that window.
-- **Remembers where you were** — backing out of a photo returns to that photo in the
-  grid, backing out of a grid returns to that month, and so on up the chain. The
-  navigation rail does not steal focus back.
-- **Video and Live Photos** — videos stream with seeking; Live Photos are badged
-  and play their motion clip. **This is the one path that does not use the app's pinned
-  certificate trust, so against a NAS whose certificate is only pinned it fails** — see
-  *Known limitations*.
-- **Fast viewing** — the cache is kept warm for the next 50 full-size originals
-  *starting from the photo you are on*, so paging forward is what gets accelerated. That
-  window stands down completely while the viewer is waiting for a picture of its own —
-  the one on screen, or the one a page turn just asked for — because a prefetch shares
-  the client and the wire with the photo being looked at, and warming something nobody
-  has opened yet must never be what makes that photo late. Measured on the emulator with
-  originals delayed by 12 s and a cold cache, the two seconds after the viewer opened
-  carried **one** original request with the window held and **five** without it; once the
-  photo landed the window resumed on its own (`211`–`213`). Media requests also run
-  eight-at-a-time rather than OkHttp's default five, because the
-  prefetcher and the thumbnails on screen share one client: with five, the pictures the
-  user is looking at queued behind full-size originals nobody had asked for yet, which
-  reads on a TV as the grid stuttering as focus moves.
-- **Sign in once** — credentials are stored on submit, so even a *failed* attempt
-  (wrong access code, NAS asleep) does not make you retype everything with a remote.
-  They are remembered per **server + account**, not per server: one NAS with several
-  accounts keeps each one's own password and 访问码, and the login screen offers them as
-  one-press shortcuts. Typing a different account's name for the same address brings that
-  account's password with it. Starting the app with a saved login shows a **loading
-  screen**, not the login form: the form used to appear for a moment, take focus and ask
-  the system for the on-screen keyboard, and then be thrown away the instant the sign-in
-  landed. If the sign-in takes more than a few seconds the loading screen says so and
-  offers the way out a remote can press — Back — which leaves the form, prefilled, with
-  the server's own message on it.
-- **Address only, HTTPS only** — the login field takes a server address such as
-  `192.168.31.14:50317`; with no port it uses the fnOS secure default, 5667. There is no
-  cleartext mode: a typed `http://` is folded to `https://`, so credentials never leave
-  the TV in the clear.
-- **The NAS certificate is trusted on first use.** fnOS serves a self-signed certificate
-  (`O=fnOS CN=fnOS`) whose `subjectAltName` is `DNS:fnOS` — no IP, no name a user could
-  type — so no stock HTTPS client can validate it, for two independent reasons. The app
-  therefore remembers the fingerprint the first time it connects, and refuses a *different*
-  one once: you are told the certificate changed and the next press of 登录 accepts it.
-  These certificates last about three months, so a renewal is normal, not an attack.
-  See [docs/fnos-photo-api.md](docs/fnos-photo-api.md#7-tls--the-self-signed-certificate).
-- **FN ID sign-in was removed.** It resolved through the vendor's cloud, whose relay
-  (`<fnid>.fnos.net:443`) answers every real path with a 302 to its own landing page and
-  proxies nothing to the NAS, so that route could never carry the API. What a remote setup
-  needs instead is in [docs/fnos-photo-api.md](docs/fnos-photo-api.md#6-fn-connect--removed).
-- **访问码 (access code)** — if fnOS is configured to gate the login entry, the app
-  passes that gate itself. The field only appears when the server actually asks for
-  it. See [docs/fnos-photo-api.md](docs/fnos-photo-api.md#2b-the-访问码-access-code-gate).
+## 功能
 
-## Image cache
+- **我的照片（时间线）** —— **一年一行，一行里横排这一年的各个月份**。一行以年份开头，随后每个月一张卡片：月份在上，该月第一张照片在下。没有照片的月份不出卡片。左右走这一年的月份，上下在年份之间移动，所以十年的照片库只是几行密集的行，而不是一屏又一屏近乎空白的年份条。
+- **我的相册** —— 用户自建的相册，带封面和照片／视频数量。
+- **他人分享相册** —— NAS 上其他账号分享给你的相册，每张卡片写明来自哪个账号。它走的是自己的一条路由（`album_grant/list_to_me`），而不是在你自己的相册列表上做过滤。空列表是正常状态 —— 说明还没有人分享给你 —— 所以它会如实说明，而不是提供重试。
+- **人物** —— 相册端侧 AI 聚类出的人脸，圆形头像。隐藏的人脸会被过滤掉。空列表是正常状态（AI 索引未开启），所以它会解释原因，而不是提供重试。
+- **文件夹** —— 相册应用托管的文件夹，可以逐层进入子文件夹及其媒体。
+- **聚会模式** —— 正在运行的幻灯片每 **30 秒**重新读一次相册，于是同事发进相册的照片无需任何人碰遥控器就会加入轮播，主持人删掉的照片则会退出。新到的照片是**追加**，而不是重新按最新排序插回原位：幻灯片是按索引走列表的，重新排序会把正在看的照片中途换掉；而追加意味着每张新照片在每一轮里都会被看到一次，不会因为“已经翻过”被跳过。已经不在新读到的这一页里的照片会被剔除 —— 一页的结论能信到什么程度，见下面**删除的照片会退出幻灯片**。
+- **进入即刷新** —— 选中一个分区、打开一个照片网格时，都会重新核对它背后的列表，这样别人分享给该账号的相册、或刚上传到 NAS 的照片，不用重启应用就会出现。核对期间屏幕上已有的内容照旧显示：重新核对绝不会把它清空，核对失败也绝不会用错误顶掉可用数据。照片数量发生变化的月份，其缓存封面也会一并丢弃。
+- **全屏查看器** —— 自适应屏幕的照片、左右翻页、信息条，以及幻灯片。信息条角上的按钮会打开幻灯片控制 —— 播放、间隔、顺序（顺序／随机）和背景音乐 —— 而且不用离开照片。幻灯片本身只走照片：轮播里混进一段视频会中止推进、还会盖住底下的音乐，所以无论哪种顺序都会跳过视频。没有常驻的屏幕快捷键栏；切换幻灯片时只弹一条会自动消失的提示。
+- **照片还没到，不等于黑屏** —— 查看器先以加载指示器和 加载中… 打开，第一张图解码完成的瞬间就撤掉（`140-viewer-loading.png`、`142-viewer-loaded.png`）。翻页从不需要它们：正在离开的那张会一直留在屏幕上，直到下一张就绪。角上的箭头是这条规则的另一半 —— 它们只反映用户自己的按键，从不反映幻灯片自己的取图。
+- **幻灯片底下放背景音乐** —— **背景音乐**在 播放顺序 之后、同一行里，点开会在本行上方展开曲目列表：上下走曲目，OK 勾选／取消（立即生效，勾上就是确认），Back 关闭列表并把焦点还给唤出它的那个控件（`121-music-list-open.png`、`124-music-both-ticked.png`）。目录里共九首 —— 列表比设置行上方的空间更高，所以高度被限制在 `MUSIC_LIST_MAX_HEIGHT`，并会自己滚动到光标所在行，而这件事别的机制都不会做：D-pad 从不会碰到那些行，是查看器的根容器在转发它们（`220-music-list-nine.png`、`221-music-scrolled.png`）。音乐随幻灯片开始，按列表顺序播放勾选的曲目，循环，并随幻灯片停止。在两处别的东西需要占用这个空间时，它是被**挂起**而非丢弃：设置行展开时（它出于完全相同的理由会暂停照片计时器），以及屏幕上是视频时（视频有自己的音轨）。离开查看器会终止它。曲目是打包在 APK 里的（占了 54 MB，代价是这个目录里大多是完整长度的中文曲目），而不是从 NAS 拉取 —— 因为配乐必须和幻灯片同时开始：一首还要先认证、先缓冲的曲子，会让每一次开场都先来一段静音。
+- **深色或浅色** —— **设置 → 主题**可以切换整个应用并记住选择。深色仍是默认，也是昏暗房间里看照片时想要的那个；浅色的存在是因为明亮的房间会把深色界面变成一面镜子，而电视前面并不总是只有电视。窗口在 Compose 画出第一帧之前就被填上所选背景色，所以浅色模式启动不会先闪一下黑（`110`–`113`、`131`）。
+- **翻页绝不清空屏幕。** 翻页走的是一个**指针**，而不是直接跳：按右键会请求下一张照片，而在它真正下载并解码完成之前，屏幕上那张照片纹丝不动，同时右下角出现一排呼吸的箭头 —— 屏幕上这张照片与指针当前位置之间每张照片一个箭头，所以连按三次右键就读作三张照片。左键是往后退一步，而不是排入反方向的一张照片：先右后左什么都不会排队，这才是指针回到原点该有的样子（`214`–`219`）。排队的照片一就绪，就顶替前一张成为屏幕上那张照片，中间没有黑帧。查看器底下始终压着两个图像层，翻页只改变哪一层不透明 —— 因为过去清空屏幕的，正是去改可见那一层的**数据模型**。
+- **删除的照片会退出幻灯片。** 每 30 秒的重读会与幻灯片正在走的列表比对，这一页不再列出的照片会从轮播中剔除，而不是作为一张已不在库里的图片留在屏幕上。一页能证明多少，要从这一页本身去读：没填满的一页说明读到了相册末尾，可以代表整个相册；填满的一页只能代表它自己那个窗口 —— 而幻灯片自己追加进来的照片，按构造必然在最新的那些照片之中，所以哪怕超出那个窗口，它的缺席也是确凿的。
+- **记住你看到哪儿** —— 从照片退出会回到网格里的那张照片，从网格退出会回到那个月份，如此逐层向上。导航栏不会把焦点抢回去。
+- **视频和 Live Photo** —— 视频支持拖动进度串流播放；Live Photo 带角标，会播放它的动态片段。**这是唯一不走应用固定证书信任的路径，所以面对只做固定（pinning）的 NAS 证书会失败** —— 见*已知限制*。
+- **快速浏览** —— 缓存会为接下来 50 张原始大图保温，**从你当前所在的那张开始**，所以被加速的是向前翻页。当查看器正在等自己的某张图时 —— 屏幕上那张，或翻页刚请求的那张 —— 这个窗口会完全让位，因为预取和正在看的照片共用同一个客户端和同一条链路，而给一张还没人打开的照片保温，绝不能成为那张照片迟到的原因。在模拟器上实测（原图延迟 12 秒、冷缓存），查看器打开后的两秒内，保温时只发出了**一个**原图请求，不保温时是**五个**；照片落地后窗口自己恢复了（`211`–`213`）。媒体请求还以八路并发而不是 OkHttp 默认的五路，因为预取器和屏幕上的缩略图共用同一个客户端：用五路时，用户正在看的照片会排在那张还没人要的原始大图后面，在电视上读起来就是焦点移动时网格在卡顿。
+- **登录一次就够** —— 凭据在提交时就保存，所以哪怕**失败**的一次尝试（访问码错误、NAS 休眠）也不会让你用遥控器把一切重敲一遍。凭据按**服务器 + 账号**记忆，而不是按服务器：一台 NAS 上的多个账号各存各的密码和 访问码，登录界面把它们作为一键快捷方式提供。为同一地址输入另一个账号名，会带上那个账号的密码。带着已保存的登录启动应用时，显示的是**加载页**，而不是登录表单：表单过去会先出现一瞬、抢走焦点、向系统请求屏幕键盘，然后在登录落地的瞬间被丢弃。如果登录超过几秒，加载页会说明情况，并提供遥控器能按的出路 —— Back，它会让表单带着预填内容和服务器自己的提示出现。
+- **只填地址，只用 HTTPS** —— 登录框接受形如 `192.168.31.14:50317` 的服务器地址；不写端口时使用飞牛的安全默认端口 5667。没有明文模式：输入 `http://` 会被折叠成 `https://`，所以凭据绝不会以明文离开电视。
+- **NAS 证书首次使用时信任。** 飞牛提供的是自签名证书（`O=fnOS CN=fnOS`），其 `subjectAltName` 是 `DNS:fnOS` —— 既没有 IP，也没有用户能输入的域名 —— 所以任何标准 HTTPS 客户端都无法验证它，而且是两个彼此独立的原因。因此应用在首次连接时记住指纹，之后一旦遇到**不同**的指纹就拒绝一次：会告诉你证书变了，再按一次 登录 即接受。这类证书有效期约三个月，所以续期是正常的，不是攻击。见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#7-tls--the-self-signed-certificate)。
+- **已移除 FN ID 登录。** 它经由厂商云解析，而其中继（`<fnid>.fnos.net:443`）对每一个真实路径都返回 302 到自己落地页，什么都不转发到 NAS，所以那条路根本承载不了这套 API。远程访问真正需要的东西在 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#6-fn-connect--removed)。
+- **访问码** —— 如果飞牛配置了登录入口网关，应用会自己通过这道网关。该输入框只在服务器确实要求时才出现。见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#2b-the-访问码-access-code-gate)。
+
+## 图片缓存
 
 | | |
 | --- | --- |
-| Ceiling | **5 GB**, LRU — the oldest entries are dropped automatically once exceeded |
-| Contents | **Images only.** Video is streamed by Media3 with no cache configured, so a video file is never written to disk |
-| Location | the app's `cache/image_cache` directory |
-| Visible in | **Settings → 清除图片缓存**, shown as `已用 x / 5.0GB` |
+| 上限 | **5 GB**，LRU —— 超出后自动淘汰最旧的条目 |
+| 内容 | **仅图片。** 视频由 Media3 串流播放且未配置缓存，所以视频文件从不写入磁盘 |
+| 位置 | 应用的 `cache/image_cache` 目录 |
+| 在哪里看 | **设置 → 清除图片缓存**，显示为 `已用 x / 5.0GB` |
 
-Prefetching decodes at 1×1 on purpose: Coil writes the **full** response to the disk
-cache before decoding, so the whole original is cached while only a single pixel is
-ever held in memory. Asking for full-size decodes would mean fifty multi-megapixel
-bitmaps in RAM for images the user may never open.
+预取故意按 1×1 解码：Coil 会在解码前把**完整**响应写进磁盘缓存，所以整张原图被缓存下来，而内存里始终只持有一个像素。若按原始尺寸解码，就意味着五十张用户可能永远不会打开的多百万像素位图驻留内存。
 
-The window is anchored at the **current** photo and only re-anchors once the user
-moves outside it — restarting on every focus change would cancel downloads already
-in flight, so scrolling would starve the cache instead of filling it. Measured on
-device with a cold cache: opening a grid fetched exactly **50 originals**
-(ids 1015–1068), and moving 13 rows down fetched **37 new ones** (1066–1104).
+这个窗口锚定在**当前**照片上，只有用户移出窗口时才重新锚定 —— 每次焦点变化都重启会取消已经在飞的下载，于是滚动会饿死缓存，而不是填满它。在真机上实测（冷缓存）：打开一个网格恰好取了 **50 张原图**（id 1015–1068），向下移动 13 行取了 **37 张新的**（1066–1104）。
 
-## Crashing on a TV
+## 在电视上崩溃时
 
-A television has no console, so a crash there leaves exactly one piece of evidence —
-that the app vanished — and the next launch starts from scratch. Uncaught exceptions are
-therefore written to `files/last-crash.txt` and the first line of the last one is shown
-in **Settings → 上次崩溃**, where somebody with a remote can read it out. The handler
-installed to do that passes the failure on to whatever handler was already there, so a
-crash still ends the process the way Android intends; it only records.
+电视没有控制台，所以在那里崩溃只留下一条证据 —— 应用消失了 —— 而下次启动一切从零开始。因此未捕获异常会写入 `files/last-crash.txt`，最近一次的首行会显示在 **设置 → 上次崩溃**，拿着遥控器的人可以念出来。为此安装的处理器会把失败继续交给原本就存在的处理器，所以崩溃仍按 Android 的意图结束进程；它只负责记录。
 
-Two start-up paths that could once kill the process on their own are now contained: the
-automatic sign-in with saved credentials, and Coil's disk cache. The second is the one
-worth naming — a cache directory the system half-cleaned, a full volume or a journal left
-behind by a kill made building the image loader throw, and because that happens lazily,
-the throw landed inside the first image request, during composition. It now costs the
-disk cache and nothing else: the app runs memory-only, and says so in the log.
+两条曾经能自己杀死进程的启动路径现在被收容了：用已保存凭据的自动登录，以及 Coil 的磁盘缓存。第二条值得一提 —— 系统清理了一半的缓存目录、写满的卷、或一次强杀留下的日志，都会让构建图像加载器抛异常，而由于这是惰性发生的，抛出点落在首次图片请求里、也就是组合期间。现在它的代价只是磁盘缓存，别无其他：应用改为纯内存运行，并在日志里说明。
 
-## Remote control
+## 遥控器操作
 
-| Key | Timeline / Albums / Folders | Viewer |
+| 按键 | 时间线／相册／文件夹 | 查看器 |
 | --- | --- | --- |
-| D-pad | move focus | — |
-| ← / → | — | previous / next photo; picks a control when the slideshow row is open |
-| ↑ / ↓ | — | show / hide the information band; changes the value when a slideshow stepper is selected |
-| OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the focused control |
-| Back | up one level | close the slideshow row if it is open, otherwise leave the viewer |
-| Back ×2 | exit the app (from the top level) | — |
+| 方向键 | 移动焦点 | — |
+| ← / → | — | 上一张／下一张照片；幻灯片行展开时用于选择控件 |
+| ↑ / ↓ | — | 显示／隐藏信息条；选中幻灯片步进控件时改变其值 |
+| OK | 打开焦点所在项 | 开始／暂停幻灯片（视频为播放／暂停）；信息条展开时操作焦点所在控件 |
+| Back | 返回上一层 | 幻灯片行展开时关闭它，否则离开查看器 |
+| Back ×2 | 退出应用（在顶层时） | — |
 
-Paging walks a pointer rather than jumping, so ← / → show where it has got to: arrows in
-the bottom-right corner — pointing the way the pointer was walked, one per photo between
-it and the photo on screen — breathing while they wait. Left takes a step back rather than
-queueing the photo behind, so right-then-left reads as nothing queued, which is what a
-pointer back where it started is. Nothing about the list moves until the queued photo is
-ready; then it becomes the photo on screen, and the arrows count down with it.
+翻页走的是指针而不是跳跃，所以 ← / → 能显示它走到了哪里：右下角的箭头 —— 指向指针走过的方向，指针与屏幕上照片之间每张照片一个 —— 等待时呼吸。左键是往后退一步，而不是排入后面那张，所以先右后左读作什么都没排队，这正是“指针回到原点”的样子。在排队那张照片就绪之前，列表的任何东西都不动；然后它就绪时成为屏幕上那张，箭头随之递减。
 
-**The arrows are for the user's own presses.** A running slideshow fetches its next
-picture through the same walk, and reporting that would put code on screen that nobody
-typed — so the queue remembers which of its entries the show asked for and counts only
-the rest. Press ← or → during a show and the arrow is back, because that one *was* typed.
+**箭头只为用户自己的按键而出现。** 正在运行的幻灯片会通过同一次走动去取它的下一张，把这也报出来就会在屏幕上显示没人按过的操作 —— 所以队列记得哪些条目是幻灯片请求的，只统计其余的。幻灯片播放期间按 ← 或 →，箭头会回来，因为那一次**是**人按的。
 
-A photo that has not arrived yet used to be a black window, which says nothing about
-whether anything is happening. The viewer now shows a spinner and 加载中… instead, and
-drops them the moment the picture is decoded. It only ever appears when there is genuinely
-nothing to look at: a page turn keeps the photo being left on screen until the next one is
-ready, and a file the server could not produce is not "on its way".
+还没到达的照片过去是一个黑色窗口，它无从说明是否有事情在发生。查看器现在改为显示加载指示器和 加载中…，并在解码完成的瞬间撤掉。它只在确实没东西可看时出现：翻页会让正在离开的照片留在屏幕上直到下一张就绪，而服务器产出不了的文件也不叫“在路上”。
 
-The bottom band holds the photo's details on the left and a **幻灯片** button in the
-corner. That button opens a row of controls above itself: play/pause, the interval
-(3 s / 5 s / 8 s / 15 s / 30 s), the order (**顺序** / **随机**) and the background
-music. Left/right picks a control and up/down changes its value. Both are remembered, and
-the interval is the same one **Settings** edits. The photo deliberately does not advance
-while the row is open. Back closes the row and leaves the button up; a second Back leaves
-the viewer.
+底部信息条左边放照片详情，角上是 **幻灯片** 按钮。该按钮在其上方展开一行控件：播放／暂停、间隔（3 s / 5 s / 8 s / 15 s / 30 s）、顺序（**顺序**／**随机**）和背景音乐。左右选择控件，上下改变其值。两者都会被记住，而且间隔与 **设置** 里编辑的是同一个。信息条展开期间，照片刻意不推进。Back 关闭该行并保留按钮；再按一次 Back 离开查看器。
 
-**The show walks photos and nothing else.** A clip in the rotation would stop the advance
-and talk over the music playing underneath it, so the next picture is chosen by looking
-past videos — several in a row if that is what the library has, and in either order
-(**顺序** walks; **随机** draws from the photos, so a run of clips cannot skew the pick).
-A clip is still reachable by hand, and if one is on screen during a show it gets one
-interval like everything else and the show moves on, rather than waiting for a stream that
-may never play.
+**幻灯片只走照片，别的都不走。** 轮播里放一段视频会中止推进、还会盖住底下放着的音乐，所以下一张是**跳过视频**选出来的 —— 如果库里连着几段就跳过几段，而且两种顺序都如此（**顺序** 是顺序走；**随机** 从照片里抽，所以连续几段视频不会让抽取偏斜）。视频仍然可以手动打开；如果幻灯片播放期间屏幕上正好是视频，它也像别的一样得到一个间隔，然后幻灯片继续，而不是去等一条可能永远播不起来的流。
 
-**背景音乐 is the one control that is not a value to step.** It is a multi-select, so OK
-— or either arrow — opens the list of tracks above the row, where up/down walks the
-tracks, OK ticks and unticks (applied at once; the tick is the confirmation), and Back
-closes the list and puts the focus back on the control it came from. Left/right and the
-photo keys do nothing while the list is up, so nothing moves underneath it. The list
-scrolls to the row the cursor is on, since the catalogue is taller than the room above the
-row and none of these rows is focusable.
+**背景音乐是唯一一个不是“步进一个值”的控件。** 它是多选，所以 OK —— 或左右任一方向键 —— 会在该行上方打开曲目列表，上下走曲目，OK 勾选和取消（立即生效；勾就是确认），Back 关闭列表并把焦点还给唤出它的那个控件。列表展开期间左右键和照片按键都不起作用，所以它底下的东西不会动。列表会滚动到光标所在行，因为目录比该行上方的空间更高，而这些行本身都不可获焦。
 
-**Setting controls all take one shape** — the slideshow row is the reference. A pill
-reads `label · value · ▲▼`, with the label on the left and the arrows on the right of
-the value, dimmed until the control is selected. Left/right moves between controls,
-up/down changes the value and applies it at once, and OK steps it on. The arrows are the
-point of the shape: they are what tells someone that up/down does something here. Do not
-drop them, and do not stack them above and below the value — that costs a line of height
-for no gain. (`ActionStepper` in `ui/viewer/` is the implementation; lift it into
-`ui/components/` when a second settings surface needs it.) The music control keeps that
-pill's geometry but opens a list instead of stepping: cycling one pill through "none,
-this one, that one, both" would hide the ticks — the thing being decided — behind one
-press at a time.
+**设置类控件都采用同一种形状** —— 幻灯片那一行是范本。一个胶囊显示 `标签 · 值 · ▲▼`，标签在左，箭头在值的右侧，未选中该控件时箭头变暗。左右在控件之间移动，上下改变其值并立即生效，OK 则步进到下一个值。箭头是这个形状的意义所在：它们才是告诉人“这里上下键有用”的东西。不要去掉它们，也不要把它们摞在值的上下方 —— 那会白白多占一行高度。（`ui/viewer/` 里的 `ActionStepper` 是实现；等第二个设置界面需要它时，再提升到 `ui/components/`。）音乐控件保留该胶囊的几何形状，但打开的是列表而不是步进：把“无、这首、那首、两首”在一个胶囊里轮转，会把正在决定的东西 —— 勾选状态 —— 藏到一次一按的后面。
 
-## Requirements
+## 环境要求
 
-- Android TV or a TV box running **Android 6.0 (API 23)** or newer.
-- A fnOS NAS reachable on the LAN **over HTTPS**, with the photo gallery service
-  running — its secure web port, 50317 on the author's NAS and 5667 by default. The app
-  has no cleartext mode, and the NAS's self-signed certificate is trusted on first use
-  (see above).
-- The fnOS account must be able to read the photos. The gallery app's **managed
-  folders** are what appears under *Folders*; add them in fnOS if the list is empty.
+- Android TV 或电视盒子，系统 **Android 6.0（API 23）** 或更高。
+- 局域网内可通过 **HTTPS** 访问的飞牛 NAS，且相册服务已运行 —— 它的安全 Web 端口，作者 NAS 上是 50317，默认为 5667。应用没有明文模式，NAS 的自签名证书首次使用时信任（见上）。
+- 飞牛账号必须能读取照片。**文件夹**下面显示的是相册应用**托管的文件夹**；列表为空时请在飞牛里添加。
 
-## Install
+## 安装
 
-Build a signed APK:
+构建已签名 APK：
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
@@ -263,38 +92,19 @@ pwsh -File tools/build.ps1 -Tasks assembleRelease
 #    and, in the same run, \\fnos-ms01\Temp\软件\app-release-20261007-150353.apk
 ```
 
-A run that assembles an APK **uploads it to the share the TV is installed from** as well
-(`tools/publish-apk.ps1`), reading the copy back to compare hashes. Building and publishing
-are one step on purpose: the file on the NAS cannot then lag behind the source, and nobody
-has to remember to copy it. Only **release** is published by default — the debug APK is for
-the emulator, and a second file in a folder people install from is just a way to install
-the wrong one. `-NoPublish` builds only, `-PublishVariants @('release','debug')` sends
-both, and `-PublishDestination <path>` sends it elsewhere. A share that is asleep or not
-authenticated does not fail the build — it warns, and the APK is still in
-`app/build/outputs/apk/`.
+一次构建 APK 的运行**同时会把它上传到电视安装时所用的共享目录**（`tools/publish-apk.ps1`），并把副本读回来比对哈希。构建与发布有意合成一步：这样 NAS 上的文件不会落后于源码，也没人需要记得去复制。默认只发布 **release** —— debug APK 是给模拟器用的，而一个大家用来安装的目录里多放一个文件，只会让人装错。`-NoPublish` 只构建，`-PublishVariants @('release','debug')` 两个都发，`-PublishDestination <path>` 发到别处。共享目录休眠或未认证不会让构建失败 —— 它会告警，而 APK 仍在 `app/build/outputs/apk/`。
 
-The name on the share carries the APK's own **build time** — `app-release-<yyyyMMdd-HHmmss>.apk`
-— so an older build stays there to fall back to and nothing is silently overwritten. The
-stamp comes from the file's timestamp rather than the clock at upload, so re-publishing the
-same APK reuses the same name instead of piling up duplicates. A leftover untimestamped
-`app-<variant>.apk` from the earlier scheme is deleted, but **only** when it is provably the
-same bytes as the copy just published; otherwise it is left alone and reported.
+共享目录上的文件名带有 APK 自己的**构建时间** —— `app-release-<yyyyMMdd-HHmmss>.apk` —— 这样旧构建还在、可以回退，也不会有东西被悄悄覆盖。时间戳取自文件时间而非上传时的时钟，所以重新发布同一个 APK 会复用同一个名字，而不会堆出重复文件。旧方案残留的、不带时间戳的 `app-<variant>.apk` 会被删除，但**仅在**能证明它与刚发布的副本字节相同时；否则原样保留并报告。
 
-Both build scripts are deliberately **pure ASCII**. Windows PowerShell decodes a `.ps1` as
-ANSI unless the file carries a UTF-8 BOM, so a literal `软件` in the script arrives as
-mojibake and every copy fails with "share is not reachable" — which is exactly what happened
-the first time this was written, and again as a mangled em dash in a warning message. The
-share name is therefore assembled as `[char]0x8F6F + [char]0x4EF6`, and no message in either
-script uses a character outside ASCII.
+两个构建脚本都刻意保持**纯 ASCII**。Windows PowerShell 会把 `.ps1` 按 ANSI 解码，除非文件带 UTF-8 BOM，于是脚本里字面量 `软件` 会变成乱码，每次复制都以 "share is not reachable" 失败 —— 这正是这段代码第一次写出来时发生的事，后来又在一条告警消息里以一个乱码破折号重演。因此共享目录名是用 `[char]0x8F6F + [char]0x4EF6` 拼出来的，两个脚本里都没有任何消息使用 ASCII 之外的字符。
 
-Then install it on the TV:
+然后在电视上安装：
 
 ```bash
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-The release build is signed with `app/tvphoto.jks`. That keystore is **not** in
-version control; generate one first (or let the debug build use its own key):
+release 构建用 `app/tvphoto.jks` 签名。该密钥库**不在**版本控制中；请先生成一个（或者让 debug 构建用自己的密钥）：
 
 ```powershell
 keytool -genkeypair -v -keystore app/tvphoto.jks -alias tvphoto `
@@ -303,244 +113,97 @@ keytool -genkeypair -v -keystore app/tvphoto.jks -alias tvphoto `
   -dname "CN=TV Photo, OU=AndroidTV, O=TV Photo, L=Local, ST=Local, C=CN"
 ```
 
-For a debug build use `tools/build.ps1 -Tasks assembleDebug` and install
-`app-debug.apk`; note its application id is `com.kungfucode.fntvphoto.debug` (the
-release one is `com.kungfucode.fntvphoto`; the code namespace is `com.tvphoto` either
-way, which is why `tools/tv.ps1` names the activity as `com.tvphoto.MainActivity`).
+debug 构建用 `tools/build.ps1 -Tasks assembleDebug` 并安装 `app-debug.apk`；注意它的 application id 是 `com.kungfucode.fntvphoto.debug`（release 是 `com.kungfucode.fntvphoto`；两者的代码命名空间都是 `com.tvphoto`，这也是 `tools/tv.ps1` 把 activity 写成 `com.tvphoto.MainActivity` 的原因）。
 
-The same APK also installs on a phone, with a normal desktop icon. `MainActivity`
-declares `LEANBACK_LAUNCHER` for the Android TV home screen *and* the plain
-`LAUNCHER` category that phone launchers enumerate, and `android.software.leanback`
-is `required="false"` so the APK is not filtered off phones. Without the `LAUNCHER`
-category the app installs and can be started by an explicit `am start`, but no
-launcher ever shows it. On a phone the UI is still the forced-landscape, D-pad-first
-TV layout.
+同一个 APK 也能装在手机上，带一个普通的桌面图标。`MainActivity` 既为 Android TV 主屏声明了 `LEANBACK_LAUNCHER`，也声明了手机启动器会枚举的普通 `LAUNCHER` category，并且 `android.software.leanback` 是 `required="false"`，所以 APK 不会被手机过滤掉。没有 `LAUNCHER` category 时，应用能装上、也能用显式 `am start` 启动，但任何启动器都不会显示它。在手机上，界面仍是强制横屏、以方向键为先的电视布局。
 
-## Project layout
+## 项目结构
 
 ```
 app/src/main/java/com/tvphoto/
   data/
-    fn/               fnOS protocol: crypto, signing, login, HTTP, endpoints
-    AppContainer.kt   hand-rolled DI; one token source shared by API + media
-    BaseUrl.kt        address normalisation (incl. full-width IME input)
-    CrashLog.kt       keeps the last uncaught exception for the Settings screen
-    SessionRepository.kt  login lifecycle, keepalive, re-login on expiry
-    PhotoRepository.kt    the only data entry point the UI sees
-    ThemeMode.kt      dark or light, and which one an install is set to
-    SlideshowMusic.kt     the tracks that ship with the app, and how a
-                          selection of them is stored and ordered
-    SlideshowMusicPlayer.kt  ExoPlayer looping the ticked tracks under a show
-  domain/Models.kt    UI-facing models
-  domain/SlideshowOrder.kt  which picture a show moves to next: photos, skip the clips
+    fn/               飞牛协议：加密、签名、登录、HTTP、各端点
+    AppContainer.kt   手写 DI；API 与媒体共用同一个 token 来源
+    BaseUrl.kt        地址归一化（含全角输入法输入）
+    CrashLog.kt       为设置页保留最近一次未捕获异常
+    SessionRepository.kt  登录生命周期、保活、过期后重新登录
+    PhotoRepository.kt    界面唯一的数据入口
+    ThemeMode.kt      深色或浅色，以及某次安装被设成哪个
+    SlideshowMusic.kt     应用自带的曲目，以及一组选中曲目如何
+                          存储与排序
+    SlideshowMusicPlayer.kt  幻灯片底下循环播放勾选曲目的 ExoPlayer
+  domain/Models.kt    面向界面的模型
+  domain/SlideshowOrder.kt  幻灯片下一张走哪张：只走照片，跳过视频
   ui/
-    login/ home/ gallery/ viewer/   screens
-    components/Spinner.kt   the drawn arc, shared by start-up and by the viewer
-    MainViewModel.kt  navigation stack + per-section state
-app/src/main/assets/music/   the nine tracks a slideshow can play
+    login/ home/ gallery/ viewer/   各屏幕
+    components/Spinner.kt   画出来的圆弧，启动与查看器共用
+    MainViewModel.kt  导航栈 + 各分区状态
+app/src/main/assets/music/   幻灯片可播放的九首曲目
 tools/
-  build.ps1           Gradle wrapper with the local toolchain; publishes the APK
-  publish-apk.ps1     copies a built APK to \\fnos-ms01\Temp\软件 and verifies it
-  tv.ps1              install / launch / screenshot / key injection
-  mock-nas/           a mock fnOS server that enforces the real auth rules, plus
-                      controls for timing- and change-dependent behaviour
-                      (slow media, add/delete a photo, pin a signing rule)
-docs/fnos-photo-api.md   the reverse-engineered protocol, with evidence
+  build.ps1           带本地工具链的 Gradle wrapper；并发布 APK
+  publish-apk.ps1     把构建好的 APK 复制到 \\fnos-ms01\Temp\软件 并校验
+  tv.ps1              安装 / 启动 / 截图 / 注入按键
+  mock-nas/           一个强制实施真实认证规则的飞牛模拟服务器，另有
+                      若干开关用于制造与时间和变更相关的行为
+                      （慢速媒体、增删照片、固定某种签名规则）
+docs/fnos-photo-api.md   逆向出来的协议，附证据
 ```
 
-## How this was verified
+## 验证方式
 
-There is no way to unit-test a closed protocol against the real device from here, so
-verification was built deliberately:
+在这里没有办法拿封闭协议对着真机做单元测试，所以验证是刻意搭起来的：
 
-1. **A mock fnOS server that actually enforces the rules** — `tools/mock-nas`. Unlike
-   the mock shipped with the reference project, it validates the `authx` signature,
-   rejects a numeric `si`, and can be pinned to either signing rule at runtime. It serves
-   **both** transports: cleartext on 5666 (what `verify.js` drives, and what is easiest to
-   read raw traffic from) and TLS on **5667**, with a self-signed `O=fnOS CN=fnOS`
-   certificate whose `subjectAltName` is `DNS:fnOS` — the same shape a real NAS presents,
-   so the client's first-use trust path is exercised rather than bypassed. Point the app at
-   `10.0.2.2:5667` to run it against the mock.
-2. **An independent reference client** — `tools/mock-nas/verify.js` re-implements the
-   protocol from scratch and asserts that the matching rule is accepted while the
-   non-matching one is rejected with `5000`, plus that the login handshake works over
-   `wss` on the TLS port. Run it before trusting any conclusion drawn from the mock:
+1. **一个真正强制实施规则的飞牛模拟服务器** —— `tools/mock-nas`。和参考项目自带的 mock 不同，它会校验 `authx` 签名、拒绝数字形式的 `si`，并且可以在运行时被固定到任一签名规则。它同时提供**两种**传输：5666 上的明文（`verify.js` 驱动的就是它，也是最容易直接读原始流量的）和 **5667** 上的 TLS，用的是自签名 `O=fnOS CN=fnOS` 证书、`subjectAltName` 为 `DNS:fnOS` —— 与真实 NAS 呈现的形状一致，所以客户端的首次使用信任路径是被真正走了一遍，而不是绕过。把应用指向 `10.0.2.2:5667` 即可对着这个 mock 运行。
+2. **一个独立的参考客户端** —— `tools/mock-nas/verify.js` 从零重新实现该协议，断言匹配的那条规则被接受、不匹配的那条以 `5000` 被拒绝，并断言登录握手在 TLS 端口上的 `wss` 可用。在相信任何从 mock 得出的结论之前先跑它：
 
    ```powershell
    cd tools/mock-nas
    npm install
-   node server.js          # terminal 1
-   node verify.js          # terminal 2
+   node server.js          # 终端 1
+   node verify.js          # 终端 2
    ```
 
-   It already caught one real bug in the mock itself (the encoded candidate included
-   a leading `?` that clients do not sign).
-3. **On-device runs on an Android TV emulator** — every screen and remote action was
-   exercised against the mock, with screenshots in `artifacts/screenshots/`.
-4. **A negotiated-signature test** — with the mock pinned to the rule the client does
-   *not* start on, requests are rejected, the client flips rule, retries, succeeds and
-   persists the choice. Confirmed by reading both the server counters and the app's
-   stored preference.
-5. **Unit tests** for address normalisation: `pwsh -File tools/build.ps1 -Tasks testDebugUnitTest`.
-   These caught a real bug where `trimEnd('/')` turned `http://` into `http:`.
-6. **Controls on the mock for the timing-dependent behaviour** — a viewer that keeps the
-   current photo up while the next one downloads cannot be checked by reading code, and
-   on a LAN the wait is too short to see. `__control/slow-media?ms=12000&sizes=o` makes
-   originals arrive twelve seconds late, and `__control/delete-photo?id=N` removes a
-   photo the way a host tidying up a party album would. Neither changes what the protocol
-   looks like — only how long it takes, and what the next read of the library contains.
+   它已经抓到过 mock 自身的一个真实 bug（编码后的候选中多带了一个客户端并不会签名的前导 `?`）。
+3. **在 Android TV 模拟器上跑真机** —— 每个屏幕和遥控器动作都对着 mock 走了一遍，截图在 `artifacts/screenshots/`。
+4. **协商签名测试** —— 把 mock 固定到客户端**不会**一开始采用的那条规则，请求被拒绝，客户端翻转规则、重试、成功，并持久化该选择。通过读服务器计数器和应用存储的偏好两处确认。
+5. **地址归一化的单元测试**：`pwsh -File tools/build.ps1 -Tasks testDebugUnitTest`。它们抓到过一个真实 bug：`trimEnd('/')` 把 `http://` 变成了 `http:`。
+6. **mock 上针对时序相关行为的开关** —— 一个“下一张下载期间保持当前照片”的查看器没法靠读代码来检查，而在局域网上等待又短到看不见。`__control/slow-media?ms=12000&sizes=o` 让原图晚十二秒到达，`__control/delete-photo?id=N` 像主持人整理聚会相册那样删掉一张照片。两者都不改变协议长什么样 —— 只改变它花多久，以及下一次读库时里面有什么。
 
-   That is how the paging queue and the deletion path were both confirmed on the
-   emulator: with a slow original, queueing 55 page-turns leaves the picture on screen
-   with five arrows and a `+2` overflow in the corner (`91-arrows-queue.png`), and the
-   queued photo replaces it when it lands (`92-arrows-advanced.png`) — a black frame
-   would have shown up in either. Uploading to the running slideshow moved the count in
-   the information band from `4 / 16` to `4 / 17`, and deleting that same photo moved it
-   back to `4 / 16` two polls later.
+   翻页队列和删除路径就是这样在模拟器上确认的：原图变慢时，连排 55 次翻页会让屏幕上那张照片保留，角上出现五个箭头和一个 `+2` 溢出（`91-arrows-queue.png`），排队的照片到达时顶替它（`92-arrows-advanced.png`）—— 这两种情况下黑帧都会暴露出来。向正在运行的幻灯片上传照片，把信息条里的计数从 `4 / 16` 变成 `4 / 17`；删掉同一张照片后，两次轮询之后又变回 `4 / 16`。
 
-   The slow-media control found a real bug in the first cut of the queue: the photo
-   *behind* the visible one is often the very photo the queue is waiting for — paging
-   back is the obvious case — and that layer had already loaded it, so no load callback
-   was ever going to fire and the arrow sat there forever. Layers now track what they are
-   actually showing as well as what they have been asked for.
-7. **The theme and the soundtrack, on the device** — neither can be read out of the code.
-   The theme was toggled from **Settings → 主题** and then walked through: the settings
-   screen, the timeline and a month grid in light (`110`–`113`), and the same app after a
-   restart, which came back light because the window had been filled with the light
-   background before Compose drew (`131`); `138-settings-dark-restored.png` is the same
-   row switched back. The viewer stays dark in both modes (`114-viewer-light.png`) — it
-   is a surface over a photograph, not over the app. The music was walked the way a
-   remote walks it: the list opening above the row (`121`), a tick (`122`), the same
-   press taking it off again (`123`), both tracks ticked (`124`), the list closing with
-   the focus still on the control it came from (`125`), the row closing without starting
-   anything (`126`), left/right doing nothing at all underneath the list — that press
-   left the frame byte-identical to the one before it — and the same two ticks still
-   there after a restart (`132`, `133`).
+   慢速媒体开关还发现了队列第一版里的一个真实 bug：可见那张照片**后面**的那张，往往正是队列在等的那张 —— 往回翻就是显然的例子 —— 而那一层已经把它加载完成了，所以永远不会触发任何加载回调，箭头就永远停在那里。现在各层既追踪自己实际显示的是什么，也追踪自己被要求加载的是什么。
+7. **主题和配乐，在真机上** —— 两者都无法从代码里读出来。主题从 **设置 → 主题** 切换后逐屏走了一遍：设置页、时间线和一个月份网格在浅色下（`110`–`113`），以及重启之后的同一个应用 —— 它回到浅色，因为窗口在 Compose 绘制之前就被填上了浅色背景（`131`）；`138-settings-dark-restored.png` 是同一行切换回去的样子。查看器在两种模式下都保持深色（`114-viewer-light.png`）—— 它是覆在照片之上的一个面，不是覆在应用之上。音乐则按遥控器的走法走了一遍：列表在该行上方展开（`121`）、勾选（`122`）、同一次按键把它取消（`123`）、两首都勾上（`124`）、列表关闭且焦点仍在唤出它的控件上（`125`）、该行关闭且没有启动任何东西（`126`）、左右键在列表底下完全不起作用 —— 那一次按键后画面与前一帧逐字节相同 —— 以及重启之后那两个勾仍在（`132`、`133`）。
 
-   The audio itself was read from the device rather than inferred. With the show running,
-   `dumpsys audio` lists `pack: com.tvphoto.debug` holding `USAGE_MEDIA /
-   CONTENT_TYPE_MUSIC` focus through `media3`'s `AudioFocusManager`, and the `AudioOut_D`
-   thread is out of standby; after stopping the show, and again after leaving the viewer
-   mid-show, that focus entry is gone and the thread is back in standby. Focus alone does
-   **not** distinguish playing from paused — `media3` keeps it while a paused player sits
-   in `STATE_READY` — so the pause paths were read from the output thread instead: with
-   the settings row open the thread drops to `0 active` tracks and standby, and returns
-   to one active track when the row closes. The same measurement with the show parked on
-   a video (`136-slideshow-video.png`) also reads `0 active`, which is the only track
-   count that could be the music there — the mock's video carries no audio stream of its
-   own (`soun` and `mp4a` boxes absent), so an active track on it could only have been
-   the music. What is *not* waited out on a device is a full pass of two four-minute
-   tracks: that the ticked tracks play in the order they are listed, and loop, is pinned
-   by `SlideshowMusicTest` (the selection is stored in catalogue order, whatever order it
-   was ticked in) and by the player's `REPEAT_MODE_ALL` over that playlist.
-8. **The three viewer rules that only show up against a slow or mixed library** —
-   `__control/slow-media?ms=30000&sizes=o` with the image cache emptied makes a photo take
-   half a minute, which is the only way to see any of these. The black window is a spinner
-   while that runs (`140`, `141`) and the picture replaces it with nothing left over
-   (`142`). With the same delay and a show running, the corner is *empty* while the show's
-   own next photo is in flight (`143-slideshow-no-arrows.png`) and shows an arrow the
-   moment a key is pressed (`144-manual-press-arrows.png`) — one press, one arrow, from a
-   queue that held both. And with 顺序 set, stepping through a month whose clip sits at
-   `4 / 16` reads `1 → 2 → 3 → 5 → 6 …`: the clip is walked over, and the position trace
-   never once reads `VID_`. Stepping onto that clip by hand while the show runs does not
-   stall it either — it gets one interval and the show is on the next picture.
-   `SlideshowOrderTest` pins the same rules off the device, over every seed for the
-   shuffled draw.
-9. **The paging pointer, the prefetch window and the nine-track catalogue** — the three
-   changes that only exist on screen. `__control/slow-media?ms=12000&sizes=o` with the
-   image cache emptied puts the pointer walk somewhere a screenshot can catch it:
-   one press right is one right arrow (`214`), the next press left takes that step back
-   and leaves the corner *empty* (`215`), and only the press after that puts a left arrow
-   up (`216`) — the old queue read that second press as two leftwards arrows. Repeating it
-   both ways counts down and cancels out as a pointer should (`217`–`219`).
-   The prefetch's new hold was measured rather than eyeballed, by reading the mock's
-   request log: in the two seconds after the viewer opened on a cold cache it carried
-   **one** original — the photo on screen — where the same build with `hold = { false }`
-   sent **five**, the visible photo twice over plus three prefetches (`/__control/media`).
-   Fourteen seconds later, with the photo landed, the window had resumed on its own (five
-   originals, `213`). The music list was walked with nine tracks in it: it opens on the
-   ticked row (`220`), scrolls itself to the last one (`221`), ticks it (`223`) and takes
-   the ticks off the two that shipped before (`224`). That last state — exactly one track
-   ticked, one of the new seven — was then played, and read off the device the way item 7
-   reads the audio: `media.audio_flinger` reports `1 Tracks of which 1 are active` for
-   `com.tvphoto.debug` with `Standby: no`, and the log carries `ExoPlayerImpl`'s init and
-   an audio `MediaCodec` being built for it, with nothing about a missing asset.
-   `SlideshowMusicTest` is what keeps the catalogue honest off the device: it fails the
-   build if any of the nine names a file the APK does not carry.
+   音频本身是从设备上读出来的，而不是推断的。幻灯片运行时 `dumpsys audio` 列出 `pack: com.tvphoto.debug` 通过 `media3` 的 `AudioFocusManager` 持有 `USAGE_MEDIA / CONTENT_TYPE_MUSIC` 焦点，且 `AudioOut_D` 线程已退出待机；停止幻灯片之后，以及中途离开查看器之后，该焦点条目消失，线程回到待机。仅有焦点**不能**区分播放与暂停 —— 暂停的播放器停在 `STATE_READY` 时 `media3` 仍持有它 —— 所以暂停路径是从输出线程读的：设置行展开时该线程掉到 `0 active` 轨道并待机，该行关闭时回到一条活动轨道。把幻灯片停在视频上做同样的测量（`136-slideshow-video.png`）也读到 `0 active`，而这是那里唯一可能是音乐的轨道数 —— mock 的视频不带自己的音轨（`soun` 和 `mp4a` box 不存在），所以它上面若有活动轨道只可能是音乐。唯一没有在设备上等完的是两首四分钟曲目的完整一轮：勾选的曲目按列表顺序播放并循环，这一点由 `SlideshowMusicTest`（无论勾选顺序如何，选择都按目录顺序存储）和播放器在该播放列表上的 `REPEAT_MODE_ALL` 钉住。
+8. **三条只有在慢速或混合媒体库上才会显形的查看器规则** —— `__control/slow-media?ms=30000&sizes=o` 加上清空图片缓存让一张照片要花半分钟，这是看到其中任何一条的唯一办法。黑窗口在那期间是加载指示器（`140`、`141`），照片接替它时不留残余（`142`）。同样延迟加上幻灯片运行时，幻灯片的下一张在飞的时候角上是**空的**（`143-slideshow-no-arrows.png`），而按下按键的一瞬间就出现一个箭头（`144-manual-press-arrows.png`）—— 一次按键，一个箭头，来自一个两者都装着的队列。而在设为顺序时，走过一个视频位于 `4 / 16` 的月份读出的是 `1 → 2 → 3 → 5 → 6 …`：视频被跨过，位置轨迹一次也没有出现 `VID_`。幻灯片运行时手动停到那段视频上也不会让它卡住 —— 它得到一个间隔，幻灯片就走到下一张。`SlideshowOrderTest` 在设备之外、对随机抽取的每个种子钉住同样的规则。
+9. **翻页指针、预取窗口和九首曲目目录** —— 三项只存在于屏幕上的改动。`__control/slow-media?ms=12000&sizes=o` 加上清空图片缓存，把指针走动放到截图能抓到的位置：按一次右是一个右箭头（`214`），接着按一次左把那一步退掉、角上**空**了（`215`），只有再下一次按键才出现一个左箭头（`216`）—— 旧的队列把那第二次按键读成了两个向左的箭头。两个方向反复做，箭头会像指针那样递减并抵消（`217`–`219`）。预取新的“让位”是量出来的而不是看出来的，办法是读 mock 的请求日志：冷缓存下查看器打开后的两秒里，它发出了**一个**原图 —— 就是屏幕上那张 —— 而同一份构建在 `hold = { false }` 时发出了**五个**，可见那张重复两次外加三次预取（`/__control/media`）。十四秒后照片落地，窗口已自行恢复（五个原图，`213`）。曲目列表在装着九首的情况下走了一遍：它在勾选那行打开（`220`）、自己滚动到最后一行（`221`）、勾上它（`223`）并取消原先自带的那两首（`224`）。最后这个状态 —— 恰好勾选一首，且是新七首之一 —— 随后被播放，并像第 7 条读音频那样从设备读出：`media.audio_flinger` 对 `com.tvphoto.debug` 报告 `1 Tracks of which 1 are active`、`Standby: no`，日志里带着 `ExoPlayerImpl` 的初始化和为它构建的音频 `MediaCodec`，没有任何关于资源缺失的信息。`SlideshowMusicTest` 是在设备之外让目录保持诚实的东西：九个名字里只要有一个是 APK 并未携带的文件，构建就会失败。
 
-Two bugs were found only by testing the way a user actually would:
+有两个 bug 只有按用户真正会用的方式去测才发现：
 
-- **Credentials were never written to storage.** Auto-login silently never happened.
-  Earlier runs passed only because the preferences had been seeded by hand — a good
-  reminder that a hand-seeded fixture can hide a broken happy path.
-- **A Chinese IME renders `.` as `。`.** Typing `10.0.2.2` could store
-  `10。0。2。2`, which only connected because the URL stack's IDN nameprep happened to
-  fold it back. The input is now normalised explicitly.
+- **凭据从未被写入存储。** 自动登录一直悄悄不发生。早先的运行之所以通过，只是因为偏好设置是手工塞进去的 —— 这很好地提醒了：手工塞入的测试数据会掩盖一条已经断掉的正常路径。
+- **中文输入法会把 `.` 渲染成 `。`。** 输入 `10.0.2.2` 可能存成 `10。0。2。2`，而它能连上只是因为 URL 栈的 IDN nameprep 恰好把它折了回来。现在输入会被显式归一化。
 
-And one found by reporting a symptom rather than reading code:
+还有一个是靠报告症状、而不是读代码发现的：
 
-- **Sign out, sign in again → `errno 401`.** Request ids embed a session id returned
-  by login, but the generator is a process-wide singleton that outlived the
-  sign-out, so the second handshake advertised the *previous* session's id. The mock
-  server had silently accepted this because it ignored `reqid` entirely — a mock is
-  only as strict as the fields it checks. It now enforces session-id freshness and
-  `verify.js` asserts the rejection, so dropping `FnReqId.reset()` makes the flow
-  fail loudly instead of regressing quietly. The login error also now includes the
-  server's own wording, since a bare `errno 401` is not actionable.
+- **退出登录、再登录 → `errno 401`。** 请求 id 内嵌了登录返回的 session id，但这个生成器是进程级单例，活得比退出登录更久，于是第二次握手对外宣告的是**上一个**会话的 id。mock 服务器此前默默接受了这一点，因为它完全忽略 `reqid` —— mock 的严格程度只等于它检查的字段。现在它会强制 session id 的新鲜度，`verify.js` 断言这次拒绝，所以去掉 `FnReqId.reset()` 会让流程大声失败，而不是悄悄回归。登录错误现在也带上服务器自己的措辞，因为光一个 `errno 401` 无法行动。
 
-And one found by pointing the app at a real NAS for the first time:
+还有一个是第一次把应用指向真实 NAS 时发现的：
 
-- **The device was gated by 访问码.** The WebSocket upgrade returned a bare `401`,
-  which looks like a credential problem and is not. The gateway's
-  `X-Trim-Safe-Code-Challenge` header gives it away, and the challenge page's own
-  script reveals the `/access_code_verify` exchange. Support for it was implemented
-  from that, so the app works *without* asking the user to weaken their NAS security —
-  which would have been the lazy fix.
+- **设备被 访问码 拦住了。** WebSocket 升级返回了一个裸 `401`，看起来像凭据问题，其实不是。网关的 `X-Trim-Safe-Code-Challenge` 头暴露了它，而挑战页自己的脚本揭示了 `/access_code_verify` 这个交换。支持就是据此实现的，所以应用能正常工作，而**不用**要求用户削弱自己 NAS 的安全性 —— 那本来会是最偷懒的修法。
 
-## Known limitations
+## 已知限制
 
-- **The protocol is private and unversioned.** The signing salt/secret are global
-  constants lifted from the fnOS frontend, and v1 and v2 endpoints already coexist.
-  A server-side change can break this app. See
-  [docs/fnos-photo-api.md](docs/fnos-photo-api.md) for the risk assessment and the
-  WebDAV alternative.
-- **The password is stored in plain `SharedPreferences`.** This is forced by the
-  absence of any refresh-token flow: recovering from an expired `AccessToken`
-  requires replaying the full login. For a LAN appliance app this is a deliberate
-  trade-off, but it is worth knowing.
-- **Read-only.** Browsing, viewing and slideshow are implemented; delete, upload,
-  rename and favourites are not.
-- **No pinch-zoom or pan** in the viewer.
-- **Video playback does not use the app's certificate trust, so a clip on a NAS whose
-  certificate is only pinned will not play.** Every other request — login, the JSON API,
-  thumbnails, full-size photos — goes through OkHttp clients carrying
-  `FnCertificateTrust`. The viewer's `VideoPlayer` builds its own `DefaultHttpDataSource`
-  instead, which uses the *system* trust store, so a self-signed `O=fnOS CN=fnOS`
-  certificate fails it with `Trust anchor for certification path not found` while the
-  pictures on either side of it load perfectly. It would work if the certificate were also
-  installed as a user CA (the app's `network_security_config` trusts `src="user"`), which
-  is why this went unnoticed. The fix is to give the player the same client
-  (media3's OkHttp data source over `AppContainer.mediaHttp`, which needs the
-  `media3-datasource-okhttp` artifact). It is left alone here because the slideshow now
-  walks past clips rather than depending on one playing.
-- **A deletion deep inside a long list is noticed late.** The 30 s re-read is one page,
-  so it can only vouch for its own window: a photo deleted below that window leaves the
-  rotation on the pass that shrinks the list far enough for the window to reach it. A
-  slideshow normally holds exactly one page — the viewer never pages in more — so in
-  practice the window is the whole list; the gap needs a list longer than one page, which
-  means a grid that was scrolled to the end before the viewer was opened.
-- **Only tested against the mock server**, not a physical NAS. The protocol follows
-  two shipping implementations, but a real device may still differ in details.
-- The `POST /p/api/v1/photo/collect` favourites endpoint and the AI features
-  (people, places, search) exist in the API but are not surfaced in the UI.
+- **协议是私有且无版本的。** 签名用的 salt/secret 是从飞牛前端里抠出来的全局常量，而 v1 与 v2 端点已经并存。服务器端的一次改动就可能让这个应用失效。风险评估与 WebDAV 替代方案见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md)。
+- **密码以明文存在 `SharedPreferences` 里。** 这是没有任何 refresh-token 流程所迫：要从过期的 `AccessToken` 恢复，就必须重放整次登录。对一个局域网设备应用来说这是有意的取舍，但值得知道。
+- **只读。** 浏览、查看和幻灯片已实现；删除、上传、重命名和收藏没有。
+- **查看器没有双指缩放或平移。**
+- **视频播放不使用应用的证书信任，所以证书只做了固定的 NAS 上的视频放不出来。** 其他所有请求 —— 登录、JSON API、缩略图、原图 —— 都走携带 `FnCertificateTrust` 的 OkHttp 客户端。查看器的 `VideoPlayer` 却自建了一个 `DefaultHttpDataSource`，用的是**系统**信任库，所以自签名 `O=fnOS CN=fnOS` 证书会让它以 `Trust anchor for certification path not found` 失败，而它前后的照片却加载得好好的。如果把该证书同时作为用户 CA 安装，它就能工作（应用的 `network_security_config` 信任 `src="user"`），这也是这个问题一直没被发现的原因。修法是给播放器同一个客户端（基于 `AppContainer.mediaHttp` 的 media3 OkHttp 数据源，需要 `media3-datasource-okhttp` 这个 artifact）。这里没有动它，因为幻灯片现在会跨过视频，而不再依赖某段视频能播。
+- **长列表深处的删除会被较晚察觉。** 每 30 秒的重读只读一页，所以它只能为自己那个窗口担保：删除的照片若在该窗口之下，就要等到某一轮列表缩小到窗口能够到它时，它才会退出轮播。幻灯片通常正好持有一页 —— 查看器从不多翻页 —— 所以实践中这个窗口就是整个列表；这个缺口需要列表长于一页，也就是打开查看器之前把网格滚到了末尾。
+- **只对着 mock 服务器测过**，不是物理 NAS。协议遵循两份已发布的实现，但真实设备仍可能在细节上有差异。
+- `POST /p/api/v1/photo/collect` 收藏端点和 AI 功能（人物、地点、搜索）在 API 里存在，但界面上没有暴露。
 
-## Development toolchain
+## 开发工具链
 
-`tools/setup-toolchain.ps1` provisions a self-contained JDK 17 + Android SDK +
-Gradle under `F:\android-toolchain`, so nothing is installed system-wide and the
-whole thing can be deleted in one step. `tools/setup-emulator.ps1` and
-`tools/create-avd.ps1` add an Android TV system image and an AVD.
+`tools/setup-toolchain.ps1` 会在 `F:\android-toolchain` 下准备一套自包含的 JDK 17 + Android SDK + Gradle，所以不会有东西装到系统级，整套东西可以一步删掉。`tools/setup-emulator.ps1` 和 `tools/create-avd.ps1` 会补上 Android TV 系统镜像和一个 AVD。
 
-One environment note worth recording: every Gradle distribution URL redirects to
-`github.com`, which was unreachable from this network. The toolchain script uses the
-Tencent mirror instead.
+有一条环境笔记值得记下：所有 Gradle 发行版 URL 都会重定向到 `github.com`，而它在这个网络里不可达。工具链脚本改用腾讯镜像。

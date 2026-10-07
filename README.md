@@ -8,6 +8,16 @@
 
 ![时间线](artifacts/screenshots/forum-01-timeline.jpg)
 
+## 界面一览
+
+| | |
+| --- | --- |
+| **我的照片 · 时间线**<br>![我的照片 · 时间线](artifacts/forum/1-timeline.jpg) | **我的相册**<br>![我的相册](artifacts/forum/2-albums.jpg) |
+| **他人分享**<br>![他人分享](artifacts/forum/3-shared.jpg) | **人物相册**<br>![人物相册](artifacts/forum/4-people.jpg) |
+| **文件夹**<br>![文件夹](artifacts/forum/5-folders.jpg) | **某个月的照片网格**<br>![某个月的照片网格](artifacts/forum/6-month-grid.jpg) |
+| **文件夹里的照片，动图 / 视频角标**<br>![文件夹里的照片](artifacts/forum/7-folder-photos.jpg) | **大图 + 信息栏**<br>![大图 + 信息栏](artifacts/forum/8-viewer.jpg) |
+| **幻灯片控制条 + 背景音乐列表**<br>![幻灯片控制条 + 背景音乐列表](artifacts/forum/9-slideshow-music.jpg) | **翻页排队的箭头**<br>![翻页排队的箭头](artifacts/forum/10-paging-arrows.jpg) |
+
 ## 功能
 
 - **我的照片（时间线）** —— **一年一行，一行里横排这一年的各个月份**。一行以年份开头，随后每个月一张卡片：月份在上，该月第一张照片在下。没有照片的月份不出卡片。左右走这一年的月份，上下在年份之间移动，所以十年的照片库只是几行密集的行，而不是一屏又一屏近乎空白的年份条。
@@ -31,16 +41,6 @@
 - **NAS 证书首次使用时信任。** 飞牛提供的是自签名证书（`O=fnOS CN=fnOS`），其 `subjectAltName` 是 `DNS:fnOS` —— 既没有 IP，也没有用户能输入的域名 —— 所以任何标准 HTTPS 客户端都无法验证它，而且是两个彼此独立的原因。因此应用在首次连接时记住指纹，之后一旦遇到**不同**的指纹就拒绝一次：会告诉你证书变了，再按一次 登录 即接受。这类证书有效期约三个月，所以续期是正常的，不是攻击。见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#7-tls--the-self-signed-certificate)。
 - **已移除 FN ID 登录。** 它经由厂商云解析，而其中继（`<fnid>.fnos.net:443`）对每一个真实路径都返回 302 到自己落地页，什么都不转发到 NAS，所以那条路根本承载不了这套 API。远程访问真正需要的东西在 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#6-fn-connect--removed)。
 - **访问码** —— 如果飞牛配置了登录入口网关，应用会自己通过这道网关。该输入框只在服务器确实要求时才出现。见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#2b-the-访问码-access-code-gate)。
-
-## 界面一览
-
-| | |
-| --- | --- |
-| **我的照片 · 时间线**<br>![我的照片 · 时间线](artifacts/forum/1-timeline.jpg) | **我的相册**<br>![我的相册](artifacts/forum/2-albums.jpg) |
-| **他人分享**<br>![他人分享](artifacts/forum/3-shared.jpg) | **人物相册**<br>![人物相册](artifacts/forum/4-people.jpg) |
-| **文件夹**<br>![文件夹](artifacts/forum/5-folders.jpg) | **某个月的照片网格**<br>![某个月的照片网格](artifacts/forum/6-month-grid.jpg) |
-| **文件夹里的照片，动图 / 视频角标**<br>![文件夹里的照片](artifacts/forum/7-folder-photos.jpg) | **大图 + 信息栏**<br>![大图 + 信息栏](artifacts/forum/8-viewer.jpg) |
-| **幻灯片控制条 + 背景音乐列表**<br>![幻灯片控制条 + 背景音乐列表](artifacts/forum/9-slideshow-music.jpg) | **翻页排队的箭头**<br>![翻页排队的箭头](artifacts/forum/10-paging-arrows.jpg) |
 
 ## 图片缓存
 

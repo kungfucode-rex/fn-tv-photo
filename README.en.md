@@ -11,6 +11,16 @@ and video streaming, rather than treating the NAS as a dumb file share.
 
 ![Timeline](artifacts/screenshots/forum-01-timeline.jpg)
 
+## Screenshots
+
+| | |
+| --- | --- |
+| **Timeline**<br>![Timeline](artifacts/forum/1-timeline.jpg) | **Albums**<br>![Albums](artifacts/forum/2-albums.jpg) |
+| **Shared with me**<br>![Shared with me](artifacts/forum/3-shared.jpg) | **People**<br>![People](artifacts/forum/4-people.jpg) |
+| **Folders**<br>![Folders](artifacts/forum/5-folders.jpg) | **A month's photo grid**<br>![A month's photo grid](artifacts/forum/6-month-grid.jpg) |
+| **Photos in a folder, with Live Photo / video badges**<br>![Photos in a folder](artifacts/forum/7-folder-photos.jpg) | **Full-screen viewer with the info band**<br>![Viewer with the info band](artifacts/forum/8-viewer.jpg) |
+| **Slideshow controls with the music list**<br>![Slideshow controls with the music list](artifacts/forum/9-slideshow-music.jpg) | **Paging queue arrows**<br>![Paging queue arrows](artifacts/forum/10-paging-arrows.jpg) |
+
 ## What it does
 
 - **我的照片 (the timeline)** — **one row per year, that year's months across it**. A row
@@ -143,16 +153,6 @@ and video streaming, rather than treating the NAS as a dumb file share.
 - **访问码 (access code)** — if fnOS is configured to gate the login entry, the app
   passes that gate itself. The field only appears when the server actually asks for
   it. See [docs/fnos-photo-api.md](docs/fnos-photo-api.md#2b-the-访问码-access-code-gate).
-
-## Screenshots
-
-| | |
-| --- | --- |
-| **Timeline**<br>![Timeline](artifacts/forum/1-timeline.jpg) | **Albums**<br>![Albums](artifacts/forum/2-albums.jpg) |
-| **Shared with me**<br>![Shared with me](artifacts/forum/3-shared.jpg) | **People**<br>![People](artifacts/forum/4-people.jpg) |
-| **Folders**<br>![Folders](artifacts/forum/5-folders.jpg) | **A month's photo grid**<br>![A month's photo grid](artifacts/forum/6-month-grid.jpg) |
-| **Photos in a folder, with Live Photo / video badges**<br>![Photos in a folder](artifacts/forum/7-folder-photos.jpg) | **Full-screen viewer with the info band**<br>![Viewer with the info band](artifacts/forum/8-viewer.jpg) |
-| **Slideshow controls with the music list**<br>![Slideshow controls with the music list](artifacts/forum/9-slideshow-music.jpg) | **Paging queue arrows**<br>![Paging queue arrows](artifacts/forum/10-paging-arrows.jpg) |
 
 ## Image cache
 

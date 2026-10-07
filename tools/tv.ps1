@@ -42,10 +42,17 @@ function Invoke-Adb([string[]]$AdbArgs, [switch]$Quiet) {
 switch ($Action) {
   'install' {
     $variant = if ($Rest.Count -gt 0) { $Rest[0] } else { 'debug' }
-    $apk = Join-Path $projectRoot "app\build\outputs\apk\$variant\app-$variant.apk"
-    if (-not (Test-Path $apk)) { throw "APK not found: $apk (run tools/build.ps1 -Tasks assemble$($variant.Substring(0,1).ToUpper()+$variant.Substring(1)) first)" }
-    Invoke-Adb @('install', '-r', '-g', $apk) | Out-Null
-    Write-Host "installed $variant -> $apk"
+    # The same files the build writes and tools/publish-apk.ps1 uploads: the release APK
+    # is named after the app and its version, the debug one after the Gradle variant (see
+    # the androidComponents block in app/build.gradle.kts). The version is not repeated
+    # here, so the newest match is the one that was just built.
+    $apkPatterns = @{ 'release' = 'FN-tvphoto-*.apk'; 'debug' = 'app-debug.apk' }
+    $apkDir = Join-Path $projectRoot "app\build\outputs\apk\$variant"
+    $apk = Get-ChildItem -LiteralPath $apkDir -Filter $apkPatterns[$variant] -File -ErrorAction SilentlyContinue |
+           Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $apk) { throw "APK not found: nothing matching $($apkPatterns[$variant]) in $apkDir (run tools/build.ps1 -Tasks assemble$($variant.Substring(0,1).ToUpper()+$variant.Substring(1)) first)" }
+    Invoke-Adb @('install', '-r', '-g', $apk.FullName) | Out-Null
+    Write-Host "installed $variant -> $($apk.FullName)"
   }
 
   'launch' {

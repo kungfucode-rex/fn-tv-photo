@@ -6,6 +6,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+/*
+ * One spelling of the version. It reaches the manifest, the settings screen (through
+ * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
+ * the artifact that gets published.
+ */
+val appVersionName = "1.2"
+
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -23,7 +30,7 @@ android {
         // moved from TV Photo to FN Photo, so a TV still showing the old name can be
         // told apart from the build that carries the new one.
         versionCode = 3
-        versionName = "1.2"
+        versionName = appVersionName
     }
 
     androidResources {
@@ -75,6 +82,34 @@ android {
 
     lint {
         abortOnError = false
+    }
+}
+
+/*
+ * The release APK is named after the app and its version, not after the Gradle variant.
+ *
+ * `app-release.apk` says nothing about which app it is once the file is sitting in a TV's
+ * download folder beside other sideloaded packages. `FN-tvphoto-1.2.apk` carries the
+ * product name, the half of the applicationId that belongs to the app (`fntvphoto`), and
+ * the version - so a folder holding two of them still says which is which.
+ *
+ * The debug build keeps AGP's own name: tools/tv.ps1 installs it on the emulator and
+ * nobody is ever handed it. tools/publish-apk.ps1 and tools/tv.ps1 find the APK by the
+ * same pattern, so a rename here means renaming there too; the README "安装 / Install"
+ * section quotes the name as well.
+ *
+ * The cast is load-bearing. AGP 8.13 declares no `outputFileName` on the public
+ * VariantOutput interface - only the impl class has the setter - so an AGP that moves it
+ * fails to compile here rather than quietly shipping the default name again.
+ */
+androidComponents {
+    onVariants { variant ->
+        if (variant.buildType == "release") {
+            variant.outputs.forEach { output ->
+                (output as com.android.build.api.variant.impl.VariantOutputImpl)
+                    .outputFileName.set("FN-tvphoto-$appVersionName.apk")
+            }
+        }
     }
 }
 

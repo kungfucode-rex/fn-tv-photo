@@ -48,14 +48,14 @@ FN Photo 是一个 Android TV 端的飞牛相册客户端。它走的是飞牛�
 
 ■ 怎么装
 
-1. 下载 APK（版本 1.2，68 MB —— 体积主要是随包内置的背景音乐；包名 com.kungfucode.fntvphoto）：
+1. 下载 APK（版本 1.2，66 MiB —— 体积主要是随包内置的背景音乐；包名 com.kungfucode.fntvphoto）：
    https://github.com/kungfucode-rex/fn-tv-photo/releases/latest
    （论坛附件放得下的话也会传一份，两个地方是同一个包）
 
 2. 安装（三种任选）：
    · 拷到 U 盘插到电视上，用电视自带的文件管理器点开安装（大部分电视要先在设置里允许「未知来源应用」）；
    · 用当贝市场 / 电视助手之类的「本地安装」功能；
-   · 会用 adb 的话：adb install -r app-release.apk
+   · 会用 adb 的话：adb install -r FN-tvphoto-1.2.apk
 
 3. 首次打开填 NAS 地址，例如 192.168.31.14:50317（不写端口就按飞牛默认的 5667 走），再填飞牛的账号和密码。NAS 如果开了访问码，会多出一个访问码输入框。
 
@@ -108,7 +108,7 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
   [x] GitHub 仓库已上线：https://github.com/kungfucode-rex/fn-tv-photo
       （原先这里写的是 https://github.com/fn-tv-photo，那个地址不存在。）
   [x] Release v1.2 已发布，APK 挂在上面：
-      https://github.com/kungfucode-rex/fn-tv-photo/releases/download/v1.2/app-release.apk
+      https://github.com/kungfucode-rex/fn-tv-photo/releases/download/v1.2/FN-tvphoto-1.2.apk
       68,897,839 字节，SHA-256 6D07CF86…CCE6A37。已从 Release 下载回来比对过，
       与本地构建的包逐字节一致。
       注意：这台机器连不上 github.com（TCP 443 超时），api.github.com 和资源域名正常。
@@ -124,6 +124,6 @@ GitHub：https://github.com/kungfucode-rex/fn-tv-photo
       （标题格式、必须附截图、是否要求说明收费 / 安全等）。
   [x] 应用名已从 TV Photo 改成 FN Photo（桌面图标名、登录页标题、设置页的那行版本号，
       以及登录时上报给 NAS 的设备名），版本号随之升到 1.2 / versionCode 3。
-      新包：app/build/outputs/apk/release/app-release.apk（未发到 \\fnos-ms01\Temp\软件）。
+      新包：app/build/outputs/apk/release/FN-tvphoto-1.2.apk（未发到 \\fnos-ms01\Temp\软件）。
       包名仍是 com.kungfucode.fntvphoto —— 对 Android 来说它和旧的 com.tvphoto 是两个 App，
       会各自出现一个图标；装了旧的先卸载。

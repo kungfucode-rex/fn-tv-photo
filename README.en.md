@@ -261,8 +261,8 @@ Build a signed APK:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/app-release.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\app-release-20261007-150353.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.2.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.2-20261007-150353.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -275,12 +275,20 @@ both, and `-PublishDestination <path>` sends it elsewhere. A share that is aslee
 authenticated does not fail the build — it warns, and the APK is still in
 `app/build/outputs/apk/`.
 
-The name on the share carries the APK's own **build time** — `app-release-<yyyyMMdd-HHmmss>.apk`
-— so an older build stays there to fall back to and nothing is silently overwritten. The
-stamp comes from the file's timestamp rather than the clock at upload, so re-publishing the
-same APK reuses the same name instead of piling up duplicates. A leftover untimestamped
-`app-<variant>.apk` from the earlier scheme is deleted, but **only** when it is provably the
-same bytes as the copy just published; otherwise it is left alone and reported.
+The release APK is named after the app **and its version** rather than after the Gradle
+variant — `FN-tvphoto-1.2.apk`. The version string is written once, as `appVersionName` in
+`app/build.gradle.kts`; the manifest, the settings screen and the file name all take it from
+there, so bumping the version renames the artifact with it. `app-release.apk` was the
+alternative, and it says nothing about which app or which version the file is once it is
+sitting in a TV's download folder. The name on the share then carries that APK's own **build
+time** — `FN-tvphoto-1.2-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
+to and nothing is silently overwritten. The stamp comes from the file's timestamp rather
+than the clock at upload, so re-publishing the same APK reuses the same name instead of
+piling up duplicates. `tools/publish-apk.ps1` and `tools/tv.ps1` take the newest file
+matching `FN-tvphoto-*.apk`, which is why neither script repeats the version. An
+untimestamped file of the same name, or a leftover `app-<variant>.apk` from the earlier
+scheme, is deleted, but **only** when it is provably the same bytes as the copy just
+published; otherwise it is left alone and reported.
 
 Both build scripts are deliberately **pure ASCII**. Windows PowerShell decodes a `.ps1` as
 ANSI unless the file carries a UTF-8 BOM, so a literal `软件` in the script arrives as
@@ -292,7 +300,7 @@ script uses a character outside ASCII.
 Then install it on the TV:
 
 ```bash
-adb install -r app/build/outputs/apk/release/app-release.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.2.apk
 ```
 
 The release build is signed with `app/tvphoto.jks`. That keystore is **not** in

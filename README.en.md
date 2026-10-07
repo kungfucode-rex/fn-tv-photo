@@ -9,7 +9,7 @@ It talks to the fnOS photo gallery's own API — the same one the official app u
 so it gets the real timeline, albums, folders, server-side thumbnails, Live Photos
 and video streaming, rather than treating the NAS as a dumb file share.
 
-![Timeline](artifacts/screenshots/22-autologin-restart.png)
+![Timeline](artifacts/screenshots/forum-01-timeline.png)
 
 ## What it does
 
@@ -355,6 +355,8 @@ tools/
   mock-nas/           a mock fnOS server that enforces the real auth rules, plus
                       controls for timing- and change-dependent behaviour
                       (slow media, add/delete a photo, pin a signing rule)
+    fetch-photos.js   fetches the test photos it serves (real photographs, not gradients)
+    assets/photos/    those photos, one rendition per advertised thumbnail size, plus CREDITS.md
 docs/fnos-photo-api.md   the reverse-engineered protocol, with evidence
 ```
 
@@ -370,7 +372,11 @@ verification was built deliberately:
    read raw traffic from) and TLS on **5667**, with a self-signed `O=fnOS CN=fnOS`
    certificate whose `subjectAltName` is `DNS:fnOS` — the same shape a real NAS presents,
    so the client's first-use trust path is exercised rather than bypassed. Point the app at
-   `10.0.2.2:5667` to run it against the mock.
+   `10.0.2.2:5667` to run it against the mock. The photos it serves are the 60 **real
+   photographs** in `tools/mock-nas/assets/photos/` (`node fetch-photos.js` downloads them;
+   the Unsplash Licence and a per-photo source list live in the `CREDITS.md` beside them) —
+   the mock used to paint one gradient per photo, which is enough to assert that a thumbnail
+   arrived and useless in a screenshot anyone else is meant to look at.
 2. **An independent reference client** — `tools/mock-nas/verify.js` re-implements the
    protocol from scratch and asserts that the matching rule is accepted while the
    non-matching one is rejected with `5000`, plus that the login handshake works over

@@ -10,6 +10,10 @@ captures/
 # Sandbox/ACL diagnostic reports (machine-specific tooling noise)
 artifacts/acl-report/
 
+# Scratch space for a working session: probe scripts, contact sheets, build logs.
+# The screenshots that are meant to be kept live in artifacts/screenshots/.
+artifacts/tmp/
+
 # Local machine configuration
 local.properties
 .idea/
@@ -22,6 +26,10 @@ local.properties
 
 # Mock NAS server
 tools/mock-nas/node_modules/
+
+# Mock photo library: ~12 MB of Picsum/Unsplash renditions, fetched at the sizes the mock
+# advertises. Regenerate with `node fetch-photos.js` rather than storing them in git.
+tools/mock-nas/assets/photos/
 
 # Third-party reference material (see README)
 reference/

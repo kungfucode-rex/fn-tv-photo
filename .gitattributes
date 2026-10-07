@@ -1,0 +1,14 @@
+# Normalize line endings: LF in the repository on every platform.
+* text=auto eol=lf
+
+# Binary assets — never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.mp3 binary
+*.mp4 binary
+*.p12 binary
+*.jks binary
+*.apk binary

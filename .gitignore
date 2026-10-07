@@ -1,0 +1,30 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+.kotlin/
+captures/
+*.apk
+*.aab
+
+# Sandbox/ACL diagnostic reports (machine-specific tooling noise)
+artifacts/acl-report/
+
+# Local machine configuration
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Release signing material — generate your own; see README.
+*.jks
+*.keystore
+
+# Mock NAS server
+tools/mock-nas/node_modules/
+
+# Third-party reference material (see README)
+reference/
+
+# Emulator / adb noise
+*.log

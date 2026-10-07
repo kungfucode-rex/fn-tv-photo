@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Photo</string>
+
+    <!-- Login -->
+    <string name="login_title">TV Photo</string>
+    <string name="login_subtitle">连接你的飞牛 NAS</string>
+    <string name="login_host">服务器地址</string>
+    <string name="login_host_hint">https://192.168.1.10:5667（仅支持 HTTPS）</string>
+    <string name="login_user">账号</string>
+    <string name="login_password">密码</string>
+    <string name="login_access_code">访问码</string>
+    <string name="login_access_code_hint">设备未开启访问码时留空</string>
+    <string name="access_code_required">此设备启用了访问码，请填写访问码后重试</string>
+    <string name="access_code_rejected">访问码错误</string>
+    <string name="certificate_changed">服务器证书已更换（NAS 重装或证书续期都会如此）。确认无误后，再按一次登录即信任新证书</string>
+    <string name="login_submit">登录</string>
+    <string name="login_connecting">正在登录…</string>
+    <string name="login_restoring">正在登录…</string>
+    <string name="login_restoring_hint">正在用已保存的账号自动登录</string>
+    <string name="login_restoring_slow">登录有点慢…按返回键可改用其他账号</string>
+    <string name="login_remember">已保存的账号（上下键选择，OK 直接登录）</string>
+    <string name="login_failed">登录失败</string>
+    <string name="host_required">请填写飞牛设备地址</string>
+
+    <!-- Navigation rail. The same strings head the sections they open, so a rail entry
+         and the page it lands on read as the same thing. -->
+    <string name="nav_timeline">我的照片</string>
+    <string name="nav_albums">我的相册</string>
+    <string name="nav_shared">他人分享</string>
+    <string name="nav_people">人物相册</string>
+    <string name="nav_folders">文件夹</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- Common -->
+    <string name="loading">加载中…</string>
+    <string name="retry">重试</string>
+    <string name="empty">这里还没有照片</string>
+    <string name="back">返回</string>
+    <string name="close">关闭</string>
+    <string name="logout">退出登录</string>
+    <string name="error_prefix">出错了</string>
+    <string name="exit_hint">再按一次返回键退出</string>
+
+    <!-- Media kinds -->
+    <string name="badge_video">视频</string>
+    <string name="badge_live">动图</string>
+    <string name="album_untitled">未命名相册</string>
+    <string name="shared_by">来自 %1$s</string>
+    <string name="shared_albums_empty">还没有人分享相册给你。别人把相册共享给你的账号后，就会出现在这里。</string>
+    <string name="person_untitled">未命名人物</string>
+    <string name="people_count">%1$d 位人物</string>
+    <string name="people_empty">没有人像数据。请先在飞牛相册里开启 AI 识别并完成索引。</string>
+
+    <!-- Content -->
+    <string name="photos_count">%1$d 张</string>
+    <string name="year_count">%1$d 年</string>
+    <string name="photos_videos_count">%1$d 张照片 · %2$d 个视频</string>
+    <string name="album_count">%1$d 项</string>
+    <string name="all_photos">全部照片</string>
+    <string name="stat_summary">共 %1$d 张照片 · %2$d 个视频</string>
+
+    <!-- Viewer -->
+    <string name="viewer_slideshow_start">播放幻灯片</string>
+    <string name="viewer_slideshow_stop">暂停幻灯片</string>
+    <string name="viewer_prev">上一张</string>
+    <string name="viewer_next">下一张</string>
+    <string name="viewer_position">%1$d / %2$d</string>
+    <string name="viewer_slideshow_hint">左右键切换 · OK 播放/暂停幻灯片 · 上下键显示信息 · 返回键退出</string>
+    <string name="viewer_playing">播放中</string>
+    <string name="viewer_paused">已暂停</string>
+    <string name="viewer_action_slideshow">幻灯片</string>
+    <string name="viewer_action_play">播放</string>
+    <string name="viewer_action_pause">暂停</string>
+    <string name="viewer_interval_option">%1$d秒</string>
+    <string name="viewer_interval_label">间隔</string>
+    <string name="viewer_order_label">播放顺序</string>
+    <string name="viewer_order_sequential">顺序</string>
+    <string name="viewer_order_shuffle">随机</string>
+    <string name="viewer_added">新增 %1$d 张</string>
+    <string name="viewer_removed">移除 %1$d 张</string>
+    <string name="viewer_list_changed">新增 %1$d 张 · 移除 %2$d 张</string>
+    <string name="viewer_music_label">背景音乐</string>
+    <string name="viewer_music_none">未选择</string>
+    <string name="viewer_music_count">%1$d 首</string>
+    <string name="viewer_music_hint">上下选择 · OK 勾选 · 返回关闭</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_server">服务器</string>
+    <string name="settings_account">账号</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_sign_mode">签名模式</string>
+    <string name="settings_sign_mode_hint">默认自动协商。若列表一直报签名错误，可手动切换。</string>
+    <string name="settings_slideshow_interval">幻灯片间隔</string>
+    <string name="settings_slideshow_interval_value">%1$d 秒</string>
+    <string name="settings_cache">清除图片缓存</string>
+    <string name="settings_cache_cleared">缓存已清除</string>
+    <string name="settings_cache_usage">已用 %1$s / %2$s</string>
+    <string name="settings_cache_measuring">读取中…</string>
+    <string name="settings_last_crash">上次崩溃</string>
+    <string name="settings_crash_none">无</string>
+</resources>

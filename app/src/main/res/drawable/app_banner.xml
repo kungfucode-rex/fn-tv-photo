@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TV banner shown by the leanback launcher (rendered at 320x180dp).
+  A stylised photo stack on a dark background.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path
+        android:fillColor="#101826"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- back card -->
+    <path
+        android:fillColor="#1E2A3D"
+        android:pathData="M78,46h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- middle card -->
+    <path
+        android:fillColor="#2B3A52"
+        android:pathData="M92,38h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- front photo -->
+    <path
+        android:fillColor="#0B1220"
+        android:pathData="M106,30h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- sun -->
+    <path
+        android:fillColor="#FFC24B"
+        android:pathData="M232,58m-11,0a11,11 0 1,0 22,0a11,11 0 1,0 -22,0" />
+
+    <!-- mountains -->
+    <path
+        android:fillColor="#35C4A0"
+        android:pathData="M106,130l38,-44 26,30 20,-22 46,36z" />
+
+    <path
+        android:fillColor="#2A9E84"
+        android:pathData="M106,130l30,-34 22,34z" />
+</vector>

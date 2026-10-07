@@ -1,0 +1,13 @@
+{
+  "name": "tvphoto-mock-nas",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mock fnOS server used to verify the TV Photo client end to end.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

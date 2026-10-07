@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TV Photo</string>
+
+    <!-- Login -->
+    <string name="login_title">TV Photo</string>
+    <string name="login_subtitle">Connect to your fnOS NAS</string>
+    <string name="login_host">Server address</string>
+    <string name="login_host_hint">https://192.168.1.10:5667 (HTTPS only)</string>
+    <string name="login_user">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_access_code">Access code</string>
+    <string name="login_access_code_hint">Leave blank unless the device requires one</string>
+    <string name="access_code_required">This device requires an access code — enter it and try again</string>
+    <string name="access_code_rejected">Access code rejected</string>
+    <string name="certificate_changed">The server certificate has changed — a NAS reinstall or a renewed certificate does that. If that is expected, press sign in again to trust the new one</string>
+    <string name="login_submit">Sign in</string>
+    <string name="login_connecting">Signing in…</string>
+    <string name="login_restoring">Signing in…</string>
+    <string name="login_restoring_hint">Signing in with the saved account</string>
+    <string name="login_restoring_slow">Taking a while — press back to use another account</string>
+    <string name="login_remember">Saved accounts (use up/down, press OK to sign in)</string>
+    <string name="login_failed">Sign-in failed</string>
+    <string name="host_required">Enter your fnOS device address</string>
+
+    <!-- Navigation rail. The same strings head the sections they open, so a rail entry
+         and the page it lands on read as the same thing. -->
+    <string name="nav_timeline">My photos</string>
+    <string name="nav_albums">My albums</string>
+    <string name="nav_shared">Shared with me</string>
+    <string name="nav_people">People albums</string>
+    <string name="nav_folders">Folders</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Common -->
+    <string name="loading">Loading…</string>
+    <string name="retry">Retry</string>
+    <string name="empty">No photos here yet</string>
+    <string name="back">Back</string>
+    <string name="close">Close</string>
+    <string name="logout">Sign out</string>
+    <string name="error_prefix">Something went wrong</string>
+    <string name="exit_hint">Press back again to exit</string>
+
+    <!-- Media kinds -->
+    <string name="badge_video">Video</string>
+    <string name="badge_live">Live</string>
+    <string name="album_untitled">Untitled album</string>
+    <string name="shared_by">From %1$s</string>
+    <string name="shared_albums_empty">Nobody has shared an album with you yet. Albums other people share with your account appear here.</string>
+    <string name="person_untitled">Unnamed person</string>
+    <string name="people_count">%1$d people</string>
+    <string name="people_empty">No face data yet. Enable AI recognition in the fnOS gallery and let it finish indexing.</string>
+
+    <!-- Content -->
+    <string name="photos_count">%1$d items</string>
+    <string name="year_count">%1$d years</string>
+    <string name="photos_videos_count">%1$d photos · %2$d videos</string>
+    <string name="album_count">%1$d items</string>
+    <string name="all_photos">All photos</string>
+    <string name="stat_summary">%1$d photos · %2$d videos</string>
+
+    <!-- Viewer -->
+    <string name="viewer_slideshow_start">Play slideshow</string>
+    <string name="viewer_slideshow_stop">Pause slideshow</string>
+    <string name="viewer_prev">Previous</string>
+    <string name="viewer_next">Next</string>
+    <string name="viewer_position">%1$d / %2$d</string>
+    <string name="viewer_slideshow_hint">Left/right to switch · OK toggles slideshow · up/down for info · back to exit</string>
+    <string name="viewer_playing">Playing</string>
+    <string name="viewer_paused">Paused</string>
+    <string name="viewer_action_slideshow">Slideshow</string>
+    <string name="viewer_action_play">Play</string>
+    <string name="viewer_action_pause">Pause</string>
+    <string name="viewer_interval_option">%1$ds</string>
+    <string name="viewer_interval_label">Interval</string>
+    <string name="viewer_order_label">Order</string>
+    <string name="viewer_order_sequential">In order</string>
+    <string name="viewer_order_shuffle">Shuffle</string>
+    <string name="viewer_added">%1$d new</string>
+    <string name="viewer_removed">%1$d removed</string>
+    <string name="viewer_list_changed">%1$d new · %2$d removed</string>
+    <string name="viewer_music_label">Background music</string>
+    <string name="viewer_music_none">None</string>
+    <string name="viewer_music_count">%1$d tracks</string>
+    <string name="viewer_music_hint">Up/down to choose · OK to tick · Back to close</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_dark">Dark</string>
+    <string name="settings_theme_light">Light</string>
+    <string name="settings_sign_mode">Signature mode</string>
+    <string name="settings_sign_mode_hint">Auto-negotiated by default. Switch manually if listing keeps failing with a signature error.</string>
+    <string name="settings_slideshow_interval">Slideshow interval</string>
+    <string name="settings_slideshow_interval_value">%1$d s</string>
+    <string name="settings_cache">Clear image cache</string>
+    <string name="settings_cache_cleared">Cache cleared</string>
+    <string name="settings_cache_usage">%1$s of %2$s</string>
+    <string name="settings_cache_measuring">Reading…</string>
+    <string name="settings_last_crash">Last crash</string>
+    <string name="settings_crash_none">None</string>
+</resources>

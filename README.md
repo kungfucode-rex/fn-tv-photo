@@ -32,6 +32,16 @@
 - **已移除 FN ID 登录。** 它经由厂商云解析，而其中继（`<fnid>.fnos.net:443`）对每一个真实路径都返回 302 到自己落地页，什么都不转发到 NAS，所以那条路根本承载不了这套 API。远程访问真正需要的东西在 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#6-fn-connect--removed)。
 - **访问码** —— 如果飞牛配置了登录入口网关，应用会自己通过这道网关。该输入框只在服务器确实要求时才出现。见 [docs/fnos-photo-api.md](docs/fnos-photo-api.md#2b-the-访问码-access-code-gate)。
 
+## 界面一览
+
+| | |
+| --- | --- |
+| **我的照片 · 时间线**<br>![我的照片 · 时间线](artifacts/forum/1-timeline.jpg) | **我的相册**<br>![我的相册](artifacts/forum/2-albums.jpg) |
+| **他人分享**<br>![他人分享](artifacts/forum/3-shared.jpg) | **人物相册**<br>![人物相册](artifacts/forum/4-people.jpg) |
+| **文件夹**<br>![文件夹](artifacts/forum/5-folders.jpg) | **某个月的照片网格**<br>![某个月的照片网格](artifacts/forum/6-month-grid.jpg) |
+| **文件夹里的照片，动图 / 视频角标**<br>![文件夹里的照片](artifacts/forum/7-folder-photos.jpg) | **大图 + 信息栏**<br>![大图 + 信息栏](artifacts/forum/8-viewer.jpg) |
+| **幻灯片控制条 + 背景音乐列表**<br>![幻灯片控制条 + 背景音乐列表](artifacts/forum/9-slideshow-music.jpg) | **翻页排队的箭头**<br>![翻页排队的箭头](artifacts/forum/10-paging-arrows.jpg) |
+
 ## 图片缓存
 
 | | |

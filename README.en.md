@@ -59,18 +59,18 @@ and video streaming, rather than treating the NAS as a dumb file share.
   the music, so videos are looked past in either order. No permanent on-screen shortcut
   bar; toggling the slideshow shows a brief notice that dismisses itself.
 - **A photo that has not arrived is not a black screen** — the viewer opens on a spinner
-  and 加载中… until the first picture is decoded, and drops them the instant it is
-  (`140-viewer-loading.jpg`, `142-viewer-loaded.jpg`). Paging never needs them: the photo
+  and 加载中… until the first picture is decoded, and drops them the instant it is.
+  Paging never needs them: the photo
   being left stays up until the next one is ready. The corner arrows are the other half of
   that rule — they report the user's own presses, never the show's own fetching.
 - **Background music under the slideshow** — **背景音乐**, after 播放顺序 in the
   same row, opens a list of tracks above itself: up/down walks them, OK ticks and
-  unticks, Back closes the list with the focus back on the control it came from
-  (`121-music-list-open.jpg`, `124-music-both-ticked.jpg`). Nine tracks are catalogued —
+  unticks, Back closes the list with the focus back on the control it came from.
+  Nine tracks are catalogued —
   the list is taller than the room above the settings row, so it is capped at
   `MUSIC_LIST_MAX_HEIGHT` and scrolls itself to the cursor's row, which nothing else
-  would do: the D-pad never touches those rows, the viewer's root box routes it
-  (`220-music-list-nine.jpg`, `221-music-scrolled.jpg`). The music starts with the
+  would do: the D-pad never touches those rows, the viewer's root box routes it.
+  The music starts with the
   show, plays the ticked tracks in the order they are listed, loops, and stops with the
   show. It is *held* rather than discarded in the two places something else has the
   room's attention: while the settings row is open, which holds the photo timer for
@@ -83,16 +83,15 @@ and video streaming, rather than treating the NAS as a dumb file share.
   answer. Dark stays the default, and the one a photo browser in a dim room wants; light
   is there because a bright room turns a dark UI into a mirror, and a TV is not always
   the only thing being looked at. The window is filled with the chosen background before
-  Compose draws its first frame, so a light-mode launch does not flash black first
-  (`110`–`113`, `131`).
+  Compose draws its first frame, so a light-mode launch does not flash black first.
 - **Paging never blanks the screen.** A page turn walks a *pointer* rather than jumping:
   pressing right asks for the next photo, and until it has actually been downloaded and
   decoded the photo on screen stays exactly where it is while a row of breathing arrows
   appears in the bottom-right corner — one per photo between the photo on screen and where
   the pointer now is, so three presses right read as three photos. Left gives a step back
   instead of queueing a photo the other way: right-then-left leaves nothing queued at all,
-  which is what a pointer that returned to where it started should look like
-  (`214`–`219`). The moment the queued photo is ready it becomes the photo on screen, in
+  which is what a pointer that returned to where it started should look like.
+  The moment the queued photo is ready it becomes the photo on screen, in
   place of the one before it, with no black frame in between. Two image layers sit under
   the viewer at all times and a page turn only changes which one is opaque, because
   changing the *model* of the visible one is what used to blank the screen while the new
@@ -119,7 +118,7 @@ and video streaming, rather than treating the NAS as a dumb file share.
   has opened yet must never be what makes that photo late. Measured on the emulator with
   originals delayed by 12 s and a cold cache, the two seconds after the viewer opened
   carried **one** original request with the window held and **five** without it; once the
-  photo landed the window resumed on its own (`211`–`213`). Media requests also run
+  photo landed the window resumed on its own. Media requests also run
   eight-at-a-time rather than OkHttp's default five, because the
   prefetcher and the thumbnails on screen share one client: with five, the pictures the
   user is looking at queued behind full-size originals nobody had asked for yet, which
@@ -419,8 +418,8 @@ verification was built deliberately:
 
    That is how the paging queue and the deletion path were both confirmed on the
    emulator: with a slow original, queueing 55 page-turns leaves the picture on screen
-   with five arrows and a `+2` overflow in the corner (`91-arrows-queue.jpg`), and the
-   queued photo replaces it when it lands (`92-arrows-advanced.jpg`) — a black frame
+   with five arrows and a `+2` overflow in the corner, and the
+   queued photo replaces it when it lands — a black frame
    would have shown up in either. Uploading to the running slideshow moved the count in
    the information band from `4 / 16` to `4 / 17`, and deleting that same photo moved it
    back to `4 / 16` two polls later.
@@ -432,17 +431,17 @@ verification was built deliberately:
    actually showing as well as what they have been asked for.
 7. **The theme and the soundtrack, on the device** — neither can be read out of the code.
    The theme was toggled from **Settings → 主题** and then walked through: the settings
-   screen, the timeline and a month grid in light (`110`–`113`), and the same app after a
+   screen, the timeline and a month grid in light, and the same app after a
    restart, which came back light because the window had been filled with the light
-   background before Compose drew (`131`); `138-settings-dark-restored.jpg` is the same
-   row switched back. The viewer stays dark in both modes (`114-viewer-light.jpg`) — it
+   background before Compose drew; the same row switched back looks the same.
+   The viewer stays dark in both modes — it
    is a surface over a photograph, not over the app. The music was walked the way a
-   remote walks it: the list opening above the row (`121`), a tick (`122`), the same
-   press taking it off again (`123`), both tracks ticked (`124`), the list closing with
-   the focus still on the control it came from (`125`), the row closing without starting
-   anything (`126`), left/right doing nothing at all underneath the list — that press
+   remote walks it: the list opening above the row, a tick, the same
+   press taking it off again, both tracks ticked, the list closing with
+   the focus still on the control it came from, the row closing without starting
+   anything, left/right doing nothing at all underneath the list — that press
    left the frame byte-identical to the one before it — and the same two ticks still
-   there after a restart (`132`, `133`).
+   there after a restart.
 
    The audio itself was read from the device rather than inferred. With the show running,
    `dumpsys audio` lists `pack: com.tvphoto.debug` holding `USAGE_MEDIA /
@@ -453,7 +452,7 @@ verification was built deliberately:
    in `STATE_READY` — so the pause paths were read from the output thread instead: with
    the settings row open the thread drops to `0 active` tracks and standby, and returns
    to one active track when the row closes. The same measurement with the show parked on
-   a video (`136-slideshow-video.jpg`) also reads `0 active`, which is the only track
+   a video also reads `0 active`, which is the only track
    count that could be the music there — the mock's video carries no audio stream of its
    own (`soun` and `mp4a` boxes absent), so an active track on it could only have been
    the music. What is *not* waited out on a device is a full pass of two four-minute
@@ -463,10 +462,10 @@ verification was built deliberately:
 8. **The three viewer rules that only show up against a slow or mixed library** —
    `__control/slow-media?ms=30000&sizes=o` with the image cache emptied makes a photo take
    half a minute, which is the only way to see any of these. The black window is a spinner
-   while that runs (`140`, `141`) and the picture replaces it with nothing left over
-   (`142`). With the same delay and a show running, the corner is *empty* while the show's
-   own next photo is in flight (`143-slideshow-no-arrows.jpg`) and shows an arrow the
-   moment a key is pressed (`144-manual-press-arrows.jpg`) — one press, one arrow, from a
+   while that runs and the picture replaces it with nothing left over.
+   With the same delay and a show running, the corner is *empty* while the show's
+   own next photo is in flight and shows an arrow the
+   moment a key is pressed — one press, one arrow, from a
    queue that held both. And with 顺序 set, stepping through a month whose clip sits at
    `4 / 16` reads `1 → 2 → 3 → 5 → 6 …`: the clip is walked over, and the position trace
    never once reads `VID_`. Stepping onto that clip by hand while the show runs does not
@@ -476,18 +475,18 @@ verification was built deliberately:
 9. **The paging pointer, the prefetch window and the nine-track catalogue** — the three
    changes that only exist on screen. `__control/slow-media?ms=12000&sizes=o` with the
    image cache emptied puts the pointer walk somewhere a screenshot can catch it:
-   one press right is one right arrow (`214`), the next press left takes that step back
-   and leaves the corner *empty* (`215`), and only the press after that puts a left arrow
-   up (`216`) — the old queue read that second press as two leftwards arrows. Repeating it
-   both ways counts down and cancels out as a pointer should (`217`–`219`).
+   one press right is one right arrow, the next press left takes that step back
+   and leaves the corner *empty*, and only the press after that puts a left arrow
+   up — the old queue read that second press as two leftwards arrows. Repeating it
+   both ways counts down and cancels out as a pointer should.
    The prefetch's new hold was measured rather than eyeballed, by reading the mock's
    request log: in the two seconds after the viewer opened on a cold cache it carried
    **one** original — the photo on screen — where the same build with `hold = { false }`
    sent **five**, the visible photo twice over plus three prefetches (`/__control/media`).
    Fourteen seconds later, with the photo landed, the window had resumed on its own (five
-   originals, `213`). The music list was walked with nine tracks in it: it opens on the
-   ticked row (`220`), scrolls itself to the last one (`221`), ticks it (`223`) and takes
-   the ticks off the two that shipped before (`224`). That last state — exactly one track
+   originals). The music list was walked with nine tracks in it: it opens on the
+   ticked row, scrolls itself to the last one, ticks it and takes
+   the ticks off the two that shipped before. That last state — exactly one track
    ticked, one of the new seven — was then played, and read off the device the way item 7
    reads the audio: `media.audio_flinger` reports `1 Tracks of which 1 are active` for
    `com.tvphoto.debug` with `Standby: no`, and the log carries `ExoPlayerImpl`'s init and

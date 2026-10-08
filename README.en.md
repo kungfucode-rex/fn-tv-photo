@@ -60,7 +60,19 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   while that runs: a re-check never blanks it, and a failed one never replaces working
   data with an error. A month whose photo count has moved also drops its cached cover.
 - **Full-screen viewer** — fit-to-screen photos, left/right paging, an information
-  band, and a slideshow. The band's corner button opens slideshow controls — play,
+  band, and a slideshow. **Whether a preview draws the original file or the large
+  thumbnail is decided by Settings → 预览原图**: the default, 仅用于幻灯片播放, draws the
+  server's 1920px thumbnail while you page by hand — the tier the grid already fetched and
+  the disk cache already holds — and fetches the original only for the slideshow. Over the
+  internet that is the difference between the next photo arriving now and waiting on a
+  multi-megabyte file; 是 makes every preview an original and 否 makes them all thumbnails.
+  The band also says **which of the two is on screen** — at sofa distance they look alike,
+  and this is the only place that can tell you; while it is a thumbnail, an **原图 button
+  appears to the left of 幻灯片**, and pressing it makes the button breathe while the file
+  is fetched behind the visible layer, swaps it in the moment it lands (no black frame),
+  drops the button and turns the marker into 原图. That is "this one, at full size, now"
+  rather than a setting: the next photo is a thumbnail again. The band's corner button
+  opens slideshow controls — play,
   interval, order (顺序/随机) and background music — without leaving the photo. The show
   itself walks photos only: a clip in the rotation would stop the advance and talk over
   the music, so videos are looked past in either order. No permanent on-screen shortcut
@@ -91,14 +103,32 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   is there because a bright room turns a dark UI into a mirror, and a TV is not always
   the only thing being looked at. The window is filled with the chosen background before
   Compose draws its first frame, so a light-mode launch does not flash black first.
+- **Preview originals** — **Settings → 预览原图** has three options and OK cycles them,
+  remembering the answer: **是** (every preview is the original), **否** (every preview is
+  the large thumbnail) and **仅用于幻灯片播放** (the default). The first two speak for the
+  whole app; the third splits them by occasion, because paging by hand wants the next
+  photo now while a slideshow has seconds to spend and is the thing being watched closely.
+  Moving to originals starts with the *next* photo: the one on screen is not fetched
+  again. This is the default; wanting one photo at full size right now is the viewer's
+  **原图** button instead, which leaves the setting alone.
+- **The settings column scrolls** — there are now more rows than fit a 1080p screen, and
+  the last one, 清除图片缓存, used to be cut off at the bottom edge: a rounded box with no
+  text in it, which reads as a button that does nothing. It did clear the cache, but its
+  value was drawn below the screen. Now the row focus lands on is scrolled into view, so
+  nothing is cut off.
 - **Paging never blanks the screen.** A page turn walks a *pointer* rather than jumping:
-  pressing right asks for the next photo, and until it has actually been downloaded and
-  decoded the photo on screen stays exactly where it is while a row of breathing arrows
-  appears in the bottom-right corner — one per photo between the photo on screen and where
-  the pointer now is, so three presses right read as three photos. Left gives a step back
-  instead of queueing a photo the other way: right-then-left leaves nothing queued at all,
-  which is what a pointer that returned to where it started should look like.
-  The moment the queued photo is ready it becomes the photo on screen, in
+  pressing right moves the pointer one step, and until the photo it stopped on has
+  actually been downloaded and decoded the photo on screen stays exactly where it is while
+  a row of breathing arrows appears in the bottom-right corner — one per step the pointer
+  was walked, so three presses right read as three arrows. **Only the photo the pointer
+  stopped on is fetched**: the ones in between are steps that were walked over, not photos
+  to be shown in turn, so three presses right land on the third, and the first two are
+  never displayed and never downloaded. That matters most on a slow link, where the old
+  queue turned every press into another download in front of the one that was wanted —
+  which is indistinguishable from a freeze once a dozen presses have been banked. Left
+  gives a step back instead of queueing a photo the other way: right-then-left takes that
+  step back and leaves the pointer where it started, with the arrows gone. The moment the
+  fetched photo is ready it becomes the photo on screen, in
   place of the one before it, with no black frame in between. Two image layers sit under
   the viewer at all times and a page turn only changes which one is opaque, because
   changing the *model* of the visible one is what used to blank the screen while the new
@@ -114,16 +144,22 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   grid, backing out of a grid returns to that month, and so on up the chain. The
   navigation rail does not steal focus back.
 - **Video and Live Photos** — videos stream with seeking; Live Photos are badged
-  and play their motion clip. **This is the one path that does not use the app's pinned
-  certificate trust, so against a NAS whose certificate is only pinned it fails** — see
-  *Known limitations*.
-- **Fast viewing** — the cache is kept warm for the next 50 full-size originals
-  *starting from the photo you are on*, so paging forward is what gets accelerated. That
+  and play their motion clip. The stream goes through the **same OkHttp client as the rest
+  of the app**: the `AccessToken`, the access-code cookie, the pinned certificate trust and
+  the timeouts are all the same ones, so a video plays on a NAS with a self-signed
+  certificate exactly as the photos around it do. The player used to build its own
+  connection, and that was the one path that skipped the pinned trust. Implemented in
+  `data/OkHttpDataSource.kt`.
+- **Fast viewing** — the cache is kept warm for the next 50 of **whatever is about to be
+  shown** (the large thumbnail by default, the original when previews are set to originals
+  or the slideshow is running), *starting from the photo you are on*, so paging forward is
+  what gets accelerated. That
   window stands down completely while the viewer is waiting for a picture of its own —
   the one on screen, or the one a page turn just asked for — because a prefetch shares
   the client and the wire with the photo being looked at, and warming something nobody
   has opened yet must never be what makes that photo late. Measured on the emulator with
-  originals delayed by 12 s and a cold cache, the two seconds after the viewer opened
+  previews set to originals, originals delayed by 12 s and a cold cache, the two seconds
+  after the viewer opened
   carried **one** original request with the window held and **five** without it; once the
   photo landed the window resumed on its own. Media requests also run
   eight-at-a-time rather than OkHttp's default five, because the
@@ -202,17 +238,18 @@ disk cache and nothing else: the app runs memory-only, and says so in the log.
 | --- | --- | --- |
 | D-pad | move focus | — |
 | ← / → | — | previous / next photo; picks a control when the slideshow row is open |
-| ↑ / ↓ | — | show / hide the information band; changes the value when a slideshow stepper is selected |
-| OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the focused control |
+| ↑ / ↓ | — | show / hide the information band; once up, they walk the corner: 原图 → 幻灯片 → the settings row; changes the value when a stepper is selected |
+| OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the highlighted control |
 | Back | up one level | close the slideshow row if it is open, otherwise leave the viewer |
 | Back ×2 | exit the app (from the top level) | — |
 
 Paging walks a pointer rather than jumping, so ← / → show where it has got to: arrows in
-the bottom-right corner — pointing the way the pointer was walked, one per photo between
-it and the photo on screen — breathing while they wait. Left takes a step back rather than
-queueing the photo behind, so right-then-left reads as nothing queued, which is what a
-pointer back where it started is. Nothing about the list moves until the queued photo is
-ready; then it becomes the photo on screen, and the arrows count down with it.
+the bottom-right corner — pointing the way the pointer was walked, one per step it took —
+breathing while they wait. Left takes a step back rather than queueing the photo behind, so
+right-then-left reads as nothing queued, which is what a pointer back where it started is.
+Only the photo the pointer stopped on is fetched: three presses right land on the third, and
+the two in between are neither shown nor downloaded. Nothing about the list moves until that
+photo is ready; then it becomes the photo on screen, and the arrows go with it.
 
 **The arrows are for the user's own presses.** A running slideshow fetches its next
 picture through the same walk, and reporting that would put code on screen that nobody
@@ -232,6 +269,16 @@ music. Left/right picks a control and up/down changes its value. Both are rememb
 the interval is the same one **Settings** edits. The photo deliberately does not advance
 while the row is open. Back closes the row and leaves the button up; a second Back leaves
 the viewer.
+
+**There can be two buttons in that corner, and up/down walks them.** When the photo on
+screen is a thumbnail and the server sent an original, **原图** appears to the left of
+**幻灯片** and the D-pad lands on it as the band opens — OK fetches the original: the
+button breathes, the file is downloaded by the layer behind the visible one, and the
+moment it arrives it is swapped in (no black frame), the button goes and the D-pad is back
+on 幻灯片. ↑/↓ walk 原图 → 幻灯片 → the band itself (closing it), and ↑ from 幻灯片 is what
+opens the settings row above. ←/→ page exactly as they always did, band open or closed. A
+clip is not part of this: its "original" is the stream itself, which the player is already
+playing, so the corner never offers 原图 for one and the band says nothing about quality.
 
 **The show walks photos and nothing else.** A clip in the rotation would stop the advance
 and talk over the music playing underneath it, so the next picture is chosen by looking
@@ -275,8 +322,8 @@ press at a time.
 
 A signed APK is on the GitHub release page, so building it is optional:
 
-**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.2.apk`,
-65.7 MiB, SHA-256 `E4128197A18CA60C5C620F58750B5EF57AAC2158DFCBC08610A9A66E78AD8409` (the
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.apk`,
+65.7 MiB, SHA-256 `9027752A2414CD8ACB08C4EB35FEFDE8BFB14060D56507BDF6D7B354A32451DD` (the
 release notes quote it too). The same file also lands in the share described below; the two
 are one build.
 
@@ -284,8 +331,8 @@ To build it yourself:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/FN-tvphoto-1.2.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.2-20261007-150353.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.3.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3-20261008-134718.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -299,12 +346,12 @@ authenticated does not fail the build — it warns, and the APK is still in
 `app/build/outputs/apk/`.
 
 The release APK is named after the app **and its version** rather than after the Gradle
-variant — `FN-tvphoto-1.2.apk`. The version string is written once, as `appVersionName` in
+variant — `FN-tvphoto-1.3.apk`. The version string is written once, as `appVersionName` in
 `app/build.gradle.kts`; the manifest, the settings screen and the file name all take it from
 there, so bumping the version renames the artifact with it. `app-release.apk` was the
 alternative, and it says nothing about which app or which version the file is once it is
 sitting in a TV's download folder. The name on the share then carries that APK's own **build
-time** — `FN-tvphoto-1.2-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
+time** — `FN-tvphoto-1.3-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
 to and nothing is silently overwritten. The stamp comes from the file's timestamp rather
 than the clock at upload, so re-publishing the same APK reuses the same name instead of
 piling up duplicates. `tools/publish-apk.ps1` and `tools/tv.ps1` take the newest file
@@ -323,7 +370,7 @@ script uses a character outside ASCII.
 Then install it on the TV:
 
 ```bash
-adb install -r app/build/outputs/apk/release/FN-tvphoto-1.2.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.apk
 ```
 
 The release build is signed with `app/tvphoto.jks`. That keystore is **not** in
@@ -358,6 +405,10 @@ app/src/main/java/com/tvphoto/
     AppContainer.kt   hand-rolled DI; one token source shared by API + media
     BaseUrl.kt        address normalisation (incl. full-width IME input)
     CrashLog.kt       keeps the last uncaught exception for the Settings screen
+    OkHttpDataSource.kt  the video player reads through the app's own OkHttp
+                          client (token, access-code cookie, pinned trust)
+    PreviewOriginal.kt   original or large thumbnail for previews, and which one
+                          an install is set to
     SessionRepository.kt  login lifecycle, keepalive, re-login on expiry
     PhotoRepository.kt    the only data entry point the UI sees
     ThemeMode.kt      dark or light, and which one an install is set to
@@ -365,6 +416,7 @@ app/src/main/java/com/tvphoto/
                           selection of them is stored and ordered
     SlideshowMusicPlayer.kt  ExoPlayer looping the ticked tracks under a show
   domain/Models.kt    UI-facing models
+  domain/PagingQueue.kt  the paging pointer: where the queue stands after one press
   domain/SlideshowOrder.kt  which picture a show moves to next: photos, skip the clips
   ui/
     login/ home/ gallery/ viewer/   screens
@@ -431,18 +483,21 @@ verification was built deliberately:
    looks like — only how long it takes, and what the next read of the library contains.
 
    That is how the paging queue and the deletion path were both confirmed on the
-   emulator: with a slow original, queueing 55 page-turns leaves the picture on screen
+   emulator: with a slow original, queueing 7 page-turns leaves the picture on screen
    with five arrows and a `+2` overflow in the corner, and the
-   queued photo replaces it when it lands — a black frame
-   would have shown up in either. Uploading to the running slideshow moved the count in
+   photo the pointer stopped on replaces it when it lands — a black frame
+   would have shown up in either. (Every press used to be queued and shown in turn; only
+   the pointer's photo is fetched now, see item 11.) Uploading to the running slideshow
+   moved the count in
    the information band from `4 / 16` to `4 / 17`, and deleting that same photo moved it
    back to `4 / 16` two polls later.
 
    The slow-media control found a real bug in the first cut of the queue: the photo
    *behind* the visible one is often the very photo the queue is waiting for — paging
    back is the obvious case — and that layer had already loaded it, so no load callback
-   was ever going to fire and the arrow sat there forever. Layers now track what they are
-   actually showing as well as what they have been asked for.
+   was ever going to fire and the arrow sat there forever. Each layer's readiness is now
+   recorded against the URL it actually decoded, and pointing a layer at something else
+   drops that claim.
 7. **The theme and the soundtrack, on the device** — neither can be read out of the code.
    The theme was toggled from **Settings → 主题** and then walked through: the settings
    screen, the timeline and a month grid in light, and the same app after a
@@ -516,6 +571,45 @@ verification was built deliberately:
    fallback; the system's own drawing of it was checked in the TV emulator's
    **Settings → Apps** list.
 
+11. **Preview originals, one-photo paging and the video's TLS trust, walked on the
+    emulator against the mock** — all three only exist on screen. The new 预览原图 row was
+    walked: the default is 仅用于幻灯片播放, OK steps it to 是 → 否 and back round, and the
+    choice is persisted. That it really decides which tier is fetched was measured, not
+    assumed, by reading the mock's request log (`/__control/media`): under the default the
+    viewer and its prefetch window send only `/m/` (the 1920px large thumbnail) and not a
+    single `/o/`. Paging was walked again on a cold cache — image cache emptied, app
+    restarted, and the first entry of the month opened (the mock puts a clip there; the
+    front layer was still fetching and the prefetch window was standing down, so the log
+    held nothing but the viewer's own traffic). Three presses right later the information
+    band read `4 / 15`: the pointer walked three steps, only the third photo was fetched,
+    and the two in between were neither shown nor ever asked for — the old queue fetched
+    them and showed them one after another. The video was opened against an
+    **HTTPS mock with its self-signed certificate**: the mock logged
+    `/p/api/v1/stream/v/1000`, `logcat` carried `ExoPlayerImpl Init` and
+    `c2.goldfish.h264.decoder` decoding, and the screen showed the video's own frame —
+    where this path used to fail with `Trust anchor for certification path not found`. The
+    清除图片缓存 row was walked to and pressed too, and answered 缓存已清除: it used to be
+    cut off past the bottom edge, a rounded box with no text in it. The paging rule, the
+    preview tier and `stillUrl`'s fallbacks also live off the device, pinned by
+    `PagingQueueTest` (9), `PreviewOriginalTest` (4) and `StillUrlTest` (8) under
+    `testDebugUnitTest`.
+
+12. **The 原图 button, followed frame by frame** — this one is only provable on screen,
+    because it is about what is *on* the screen while something is being fetched. With the
+    mock's originals delayed by five seconds (`__control/slow-media?ms=5000&sizes=o`):
+    pressing ↑ opened the band, the details read **缩略图**, and the D-pad was already on
+    the **原图 button to the left of 幻灯片**; pressing OK added exactly **one** `/o/` to the
+    mock's request log (the prefetch window stood down with it, so there was no other
+    traffic) and started the button breathing — two screenshots a second apart show it
+    dimming and brightening, with the photo itself **never leaving the screen**, so no
+    black frame. Five seconds later the original landed, the same photo was swapped in
+    place (still `1 / 15`), the **原图 button was gone**, the marker read **原图** and the
+    D-pad was back on 幻灯片. Paging on to the second photo put the marker back to 缩略图
+    and the button back in the corner (←/→ still page), and stepping onto the clip offered
+    neither — its original is the stream already playing. `StillUrlTest` pins the two
+    premises of that rule off the device: one URL serving both tiers counts as the original
+    and offers no button, and a clip never has an original still to move to.
+
 Two bugs were found only by testing the way a user actually would:
 
 - **Credentials were never written to storage.** Auto-login silently never happened.
@@ -559,18 +653,6 @@ And one found by pointing the app at a real NAS for the first time:
 - **Read-only.** Browsing, viewing and slideshow are implemented; delete, upload,
   rename and favourites are not.
 - **No pinch-zoom or pan** in the viewer.
-- **Video playback does not use the app's certificate trust, so a clip on a NAS whose
-  certificate is only pinned will not play.** Every other request — login, the JSON API,
-  thumbnails, full-size photos — goes through OkHttp clients carrying
-  `FnCertificateTrust`. The viewer's `VideoPlayer` builds its own `DefaultHttpDataSource`
-  instead, which uses the *system* trust store, so a self-signed `O=fnOS CN=fnOS`
-  certificate fails it with `Trust anchor for certification path not found` while the
-  pictures on either side of it load perfectly. It would work if the certificate were also
-  installed as a user CA (the app's `network_security_config` trusts `src="user"`), which
-  is why this went unnoticed. The fix is to give the player the same client
-  (media3's OkHttp data source over `AppContainer.mediaHttp`, which needs the
-  `media3-datasource-okhttp` artifact). It is left alone here because the slideshow now
-  walks past clips rather than depending on one playing.
 - **A deletion deep inside a long list is noticed late.** The 30 s re-read is one page,
   so it can only vouch for its own window: a photo deleted below that window leaves the
   rotation on the pass that shrinks the list far enough for the window to reach it. A

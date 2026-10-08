@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.2"
+val appVersionName = "1.3"
 
 android {
     namespace = "com.tvphoto"
@@ -26,10 +26,10 @@ android {
         applicationId = "com.kungfucode.fntvphoto"
         minSdk = 23
         targetSdk = 36
-        // Bumped when the launcher label, the login title and the settings header all
-        // moved from TV Photo to FN Photo, so a TV still showing the old name can be
-        // told apart from the build that carries the new one.
-        versionCode = 3
+        // 3 carried the rename from TV Photo to FN Photo; 4 is the release that adds the
+        // preview tier setting, the on-demand original and the video fix, so a TV reporting
+        // an older code is a build from before those.
+        versionCode = 4
         versionName = appVersionName
     }
 
@@ -89,7 +89,7 @@ android {
  * The release APK is named after the app and its version, not after the Gradle variant.
  *
  * `app-release.apk` says nothing about which app it is once the file is sitting in a TV's
- * download folder beside other sideloaded packages. `FN-tvphoto-1.2.apk` carries the
+ * download folder beside other sideloaded packages. `FN-tvphoto-1.3.apk` carries the
  * product name, the half of the applicationId that belongs to the app (`fntvphoto`), and
  * the version - so a folder holding two of them still says which is which.
  *

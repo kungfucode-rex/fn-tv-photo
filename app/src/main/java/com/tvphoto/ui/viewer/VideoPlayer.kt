@@ -9,7 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -17,33 +17,28 @@ import androidx.media3.ui.PlayerView
 /**
  * Plays a NAS video or Live Photo clip.
  *
- * The stream endpoint is authenticated by the `AccessToken` header alone, so the
- * token is injected through a custom HTTP data source rather than a signed URL.
- * Range requests are supported server side, which is what makes seeking work.
+ * Everything about the connection belongs to [streams]: the `AccessToken` header, the
+ * 访问码 cookie, the pinned certificate and the timeouts are the app's own client's, and
+ * the player is handed it rather than building a connection of its own. See
+ * `OkHttpDataSource` for what the opposite — a bare media3 connection — cost here, which
+ * was every video on a NAS whose certificate is only pinned.
+ *
+ * Range requests are supported server side, which is what makes seeking work; the data
+ * source asks for the byte range media3 wants and nothing more.
  */
 @Composable
 fun VideoPlayer(
     url: String,
-    token: String?,
+    streams: DataSource.Factory,
     playWhenReady: Boolean,
     modifier: Modifier = Modifier,
     onFinished: () -> Unit = {},
 ) {
     val context = LocalContext.current
 
-    val player = remember(url, token) {
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .apply {
-                if (!token.isNullOrBlank()) {
-                    setDefaultRequestProperties(mapOf("AccessToken" to token))
-                }
-            }
-
+    val player = remember(url, streams) {
         ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(streams))
             .build()
             .apply {
                 setMediaItem(MediaItem.fromUri(url))

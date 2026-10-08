@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +28,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.tvphoto.BuildConfig
 import com.tvphoto.R
+import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SessionState
 import com.tvphoto.data.SettingsStore
 import com.tvphoto.data.ThemeMode
@@ -39,6 +42,7 @@ import com.tvphoto.ui.components.formatFileSize
 fun SettingsSection(viewModel: MainViewModel) {
     val signMode by viewModel.signMode.collectAsStateWithLifecycle()
     val slideshowSeconds by viewModel.slideshowSeconds.collectAsStateWithLifecycle()
+    val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
 
@@ -75,6 +79,11 @@ fun SettingsSection(viewModel: MainViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // The rows are taller than a 1080p screen once every one of them is here,
+            // and the last one used to be cut off at the bottom edge — a rounded box
+            // with no text in it, which reads as a button that does nothing. Focus
+            // brings the row it lands on into view, so nothing is out of reach.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 32.dp, vertical = 28.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -141,6 +150,19 @@ fun SettingsSection(viewModel: MainViewModel) {
                     .let { (it + 1) % options.size }]
                 viewModel.setSlideshowSeconds(next)
             },
+        )
+
+        ActionRow(
+            label = stringResource(R.string.settings_preview_original),
+            value = when (previewOriginal) {
+                PreviewOriginal.ALWAYS -> stringResource(R.string.settings_preview_original_yes)
+                PreviewOriginal.NEVER -> stringResource(R.string.settings_preview_original_no)
+                PreviewOriginal.SLIDESHOW_ONLY ->
+                    stringResource(R.string.settings_preview_original_slideshow)
+            },
+            hint = stringResource(R.string.settings_preview_original_hint),
+            valueColor = MaterialTheme.colorScheme.primary,
+            onClick = { viewModel.setPreviewOriginal(previewOriginal.next()) },
         )
 
         ActionRow(

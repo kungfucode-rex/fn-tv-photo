@@ -70,6 +70,10 @@
     <string name="viewer_playing">Playing</string>
     <string name="viewer_paused">Paused</string>
     <string name="viewer_action_slideshow">Slideshow</string>
+    <string name="viewer_action_original">Original</string>
+    <string name="viewer_quality_original">Original</string>
+    <string name="viewer_quality_thumbnail">Thumbnail</string>
+    <string name="viewer_original_failed">Could not load the original</string>
     <string name="viewer_action_play">Play</string>
     <string name="viewer_action_pause">Pause</string>
     <string name="viewer_interval_option">%1$ds</string>
@@ -97,6 +101,11 @@
     <string name="settings_sign_mode_hint">Auto-negotiated by default. Switch manually if listing keeps failing with a signature error.</string>
     <string name="settings_slideshow_interval">Slideshow interval</string>
     <string name="settings_slideshow_interval_value">%1$d s</string>
+    <string name="settings_preview_original">Preview originals</string>
+    <string name="settings_preview_original_yes">Yes</string>
+    <string name="settings_preview_original_no">No</string>
+    <string name="settings_preview_original_slideshow">Slideshow only</string>
+    <string name="settings_preview_original_hint">Originals are sharper; large thumbnails load faster and use less data.</string>
     <string name="settings_cache">Clear image cache</string>
     <string name="settings_cache_cleared">Cache cleared</string>
     <string name="settings_cache_usage">%1$s of %2$s</string>

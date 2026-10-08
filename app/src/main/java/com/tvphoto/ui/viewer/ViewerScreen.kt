@@ -68,10 +68,9 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.tvphoto.R
 import com.tvphoto.data.SLIDESHOW_MUSIC
-import com.tvphoto.data.SessionState
 import com.tvphoto.data.SettingsStore
-import com.tvphoto.domain.MediaItem
 import com.tvphoto.domain.nextSlideshowItem
+import com.tvphoto.domain.walkPagingPointer
 import com.tvphoto.ui.MainViewModel
 import com.tvphoto.ui.Screen
 import com.tvphoto.ui.SlideshowDelta
@@ -89,9 +88,8 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     val items = gallery.items.valueOrNull.orEmpty()
     val slideshowSeconds by viewModel.slideshowSeconds.collectAsStateWithLifecycle()
     val slideshowShuffled by viewModel.slideshowShuffled.collectAsStateWithLifecycle()
+    val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val selectedMusic by viewModel.slideshowMusic.collectAsStateWithLifecycle()
-    val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
-    val token = (sessionState as? SessionState.SignedIn)?.session?.token
     // For the party-mode notice, which is formatted with counts that only the polling
     // loop knows at the time.
     val context = LocalContext.current
@@ -116,35 +114,54 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // pictures. Here the photo being paged to is loaded by the layer *behind* the
     // visible one and only comes forward once its pixels are actually there, so what
     // the user sees changes from one finished photo to another finished photo.
+    //
+    // A layer's state is its URL, not its id. The URL is what names the pixels: two
+    // entries can share one, an entry can have none at all, and the preview setting can
+    // change which one an entry asks for without the id moving.
     var layerIds by remember { mutableStateOf<List<Long?>>(listOf(items[startIndex].id, null)) }
     var frontLayer by remember { mutableIntStateOf(0) }
 
-    // What each layer is actually showing, as opposed to what it has been asked for. A
-    // layer that has finished a photo keeps it until the model changes, so the photo
-    // behind the visible one is often the one the queue is waiting for — paging back is
-    // the obvious case — and then there is nothing to download and nothing to wait for.
-    var loadedIds by remember { mutableStateOf<List<Long?>>(listOf(null, null)) }
+    var slideshowRunning by remember { mutableStateOf(false) }
 
-    // Files the server could not produce. Only the loading indicator below cares: a
-    // photo that failed is not a photo on its way, and a spinner left running on it
-    // would be a worse answer than the black window it replaced.
-    var failedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    /**
+     * Whether the still the viewer asks for *now* is the original file.
+     *
+     * One answer for the queue, the prefetch window and the layer the viewer opens on:
+     * see `PreviewOriginal` for what the setting means and why the slideshow is the
+     * exception by default.
+     */
+    val wantsOriginal = previewOriginal.wantsOriginal(slideshowRunning)
+
+    /** The still this viewer would ask for the entry with [id] under the current setting. */
+    fun stillUrlOf(id: Long?): String? =
+        id?.let { indexById[it] }?.let(items::getOrNull)?.stillUrl(wantsOriginal)
+
+    // What each layer has been asked to draw, and what it has finished decoding. A layer
+    // whose URL is null has nothing to draw at all.
+    var layerUrls by remember {
+        mutableStateOf<List<String?>>(listOf(stillUrlOf(items[startIndex].id), null))
+    }
+    var loadedUrls by remember { mutableStateOf<List<String?>>(listOf(null, null)) }
+
+    // Files the server could not produce, by URL. Only the loading indicator below
+    // cares: a photo that failed is not a photo on its way, and a spinner left running
+    // on it would be a worse answer than the black window it replaced.
+    var failedUrls by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     // --------------------------------------------------------- the paging queue
-    // The photos between the photo on screen and the pointer the user has walked to,
-    // in the order they will be shown. Nothing about the list is re-ordered by a press:
-    // a queued photo is loaded first and becomes the current one when it is ready, and
-    // the corner arrows report how far the pointer still has to travel.
+    // How far the pointer has been walked, as the stretch of list between the photo on
+    // screen and where it stopped. Only the end of it is fetched and only the end of it is
+    // gone to — see [walkPagingPointer] — so the list is neither re-ordered by a press nor
+    // walked through one photo at a time, and the corner arrows report the distance.
     var pending by remember { mutableStateOf<List<Long>>(emptyList()) }
     var pendingRight by remember { mutableStateOf(true) }
 
     // Which of those the *show* asked for, as opposed to the user. Only the user's own
     // presses are reported in the corner: a show fetching its next picture in the
-    // background is not something to announce, and "one arrow per photo you queued"
+    // background is not something to announce, and "one arrow per step you walked"
     // would be a lie if some of the arrows were the show's.
     var slideshowQueued by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
-    var slideshowRunning by remember { mutableStateOf(false) }
     var videoPlaying by remember { mutableStateOf(true) }
     var showInfo by remember { mutableStateOf(false) }
 
@@ -161,11 +178,21 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // and falling back to the top of the list would jump the show back to the newest.
     var positionHint by remember { mutableIntStateOf(startIndex) }
 
-    // The 幻灯片 button opens a row of settings above itself. `onMainButton` says which
-    // row the D-pad is on; `settingFocus` is the control within the settings row.
+    // The 幻灯片 button opens a row of settings above itself. `mainFocus` says which of the
+    // two buttons in the corner the D-pad is on; `settingFocus` is the control within the
+    // settings row once it is open.
     var menuOpen by remember { mutableStateOf(false) }
-    var onMainButton by remember { mutableStateOf(true) }
+    var mainFocus by remember { mutableIntStateOf(MAIN_SLIDESHOW) }
     var settingFocus by remember { mutableIntStateOf(SETTING_PLAY) }
+
+    /**
+     * The photo the user asked to see at full size, if any.
+     *
+     * Held as the *id* rather than a flag: the request belongs to the photo that was on
+     * screen when it was made, so paging on makes it stale and it is dropped. It is not the
+     * setting — the setting says what every preview should be, and this says "this one, now".
+     */
+    var originalRequest by remember { mutableStateOf<Long?>(null) }
 
     // The 背景音乐 setting opens a second level: the list of tracks, above the row. Only
     // one of the two levels takes the D-pad at a time, so the cursor into the list is
@@ -198,13 +225,41 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     val current = items.getOrNull(currentIndex) ?: items.first()
 
     /**
+     * Whether what is on screen is the photo's own file rather than a thumbnail of it.
+     *
+     * Asked of the layer's URL, not of the setting: a photo loaded before the slideshow
+     * started — or before the setting was changed — is still the thumbnail, and the details
+     * band is the one place that has to tell the truth about it.
+     */
+    val showingOriginal = current.isOriginalStill(layerUrls[frontLayer])
+
+    // The 原图 button exists for a thumbnail that has an original behind it, and goes away
+    // the moment the original is what is on screen — which is also the moment there is
+    // nothing left for it to do.
+    val canLoadOriginal = current.hasDistinctOriginal && !showingOriginal
+    val originalLoading = canLoadOriginal && originalRequest == currentId
+    val originalLabel = stringResource(R.string.viewer_quality_original)
+    val thumbnailLabel = stringResource(R.string.viewer_quality_thumbnail)
+
+    // Where the D-pad is in the corner: the 幻灯片 button, or the 原图 button beside it.
+    // Neither of them while the band is closed or the settings row has the D-pad.
+    val onSlideshowButton = showInfo && !menuOpen && mainFocus == MAIN_SLIDESHOW
+    val onOriginalButton = showInfo && !menuOpen && canLoadOriginal &&
+        mainFocus == MAIN_ORIGINAL
+
+    /**
      * True while the picture on screen has not been decoded yet, which is the viewer
      * opening on it or the list changing underneath it. A page turn never sets it: the
      * photo being left stays up until the next one is ready.
+     *
+     * Asked of the URL the layer was given rather than of its id, because the URL is
+     * what the layer is actually fetching: an entry whose still moves from the thumbnail
+     * to the original under a preview setting is still working, and an entry the server
+     * sent no still for is not.
      */
     fun frontIsLoading(): Boolean {
-        val id = layerIds[frontLayer] ?: return false
-        return loadedIds[frontLayer] != id && id !in failedIds
+        val url = layerUrls[frontLayer] ?: return false
+        return loadedUrls[frontLayer] != url && url !in failedUrls
     }
 
     // Immersive viewing: the viewer hides the system bars and restores them on exit.
@@ -219,26 +274,13 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         itemCount = items.size,
         anchor = prefetchAnchor,
         // The window stands down while the viewer is waiting for a picture of its own:
-        // the one on screen at open, and the one a page turn has asked for. Both travel
-        // over the client and the LAN the prefetch is using, and the photo the user is
-        // looking at — or has just asked for — is the one that has to arrive first.
-        hold = { pending.isNotEmpty() || frontIsLoading() },
-        prefetch = { from -> viewModel.warmImageCache(items, from) },
+        // the one on screen at open, the one a page turn has asked for, and the original a
+        // press of 原图 put on its way. All three travel over the client and the LAN the
+        // prefetch is using, and the photo the user is looking at — or has just asked for —
+        // is the one that has to arrive first.
+        hold = { pending.isNotEmpty() || frontIsLoading() || originalRequest != null },
+        prefetch = { from -> viewModel.warmImageCache(items, from, wantsOriginal) },
     )
-
-    /**
-     * The photo [delta] places away from [from] in the order the user is walking.
-     *
-     * Manual paging is always sequential even when the slideshow is shuffling: left and
-     * right mean the neighbouring photo, and a random neighbour would make the arrow
-     * count a lie.
-     */
-    fun neighbourOf(from: Long?, delta: Int): Long? {
-        if (items.size <= 1) return null
-        val at = from?.let { indexById[it] } ?: currentIndex
-        val next = ((at + delta) % items.size + items.size) % items.size
-        return items[next].id
-    }
 
     /**
      * Starts the show's interval again when a step left the queue without a photo
@@ -249,36 +291,25 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     }
 
     /**
-     * Walks the paging pointer one step in [delta]'s direction.
+     * Walks the paging pointer one step in [delta]'s direction — see [walkPagingPointer],
+     * which is where the rule about what the queue holds lives.
      *
-     * Left and right move a *pointer* along the list rather than appending to a queue.
-     * The pointer is the photo the user has asked for; the arrows in the corner are how
-     * far it has been walked from the photo on screen, so pressing right and then left
-     * puts it back where it started — the right arrow disappears — instead of queueing a
-     * photo in each direction and reading as two leftwards arrows for a pointer that had
-     * not moved left at all.
-     *
-     * Photos are still shown one at a time as they arrive: the queue is the stretch of
-     * list between the photo on screen and the pointer, and it drains from the pointer's
-     * end as each photo lands.
+     * What it leaves behind is the bookkeeping a pure function cannot do: which way the
+     * pointer is walking, which queued step was the show's rather than the user's, and
+     * the show's interval when a step is given up rather than taken.
      */
     fun queueStep(delta: Int) {
+        val next = walkPagingPointer(items, currentId, pending, pendingRight, delta)
+        if (next === pending) return
         if (pending.isEmpty()) {
-            val target = neighbourOf(currentId, delta) ?: return
             pendingRight = delta > 0
-            pending = listOf(target)
-        } else if ((delta > 0) == pendingRight) {
-            val target = neighbourOf(pending.last(), delta) ?: return
-            pending = pending + target
-        } else {
-            // Walking back over a step the pointer had taken: it gives that step up
-            // rather than queueing the photo behind it. A step the *show* took is given
-            // up the same way — the user is holding the list now.
-            val dropped = pending.last()
-            pending = pending.dropLast(1)
-            slideshowQueued = slideshowQueued - dropped
-            resumeSlideshowIfIdle()
+        } else if (next.size < pending.size) {
+            // A step the *show* took is given up the same way the user's own is: the
+            // user is holding the list now.
+            slideshowQueued = slideshowQueued - pending.last()
         }
+        pending = next
+        resumeSlideshowIfIdle()
     }
 
     /**
@@ -286,6 +317,10 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
      * where the rules about videos and duplicates live.
      */
     fun queueSlideshowStep() {
+        // One picture on its way at a time. The viewer goes to the end of the queue, so a
+        // second step queued behind one that is still downloading would drop the first:
+        // on a slow link the show would quietly show every other photo.
+        if (pending.isNotEmpty()) return
         val target = nextSlideshowItem(
             items = items,
             fromIndex = indexById[pending.lastOrNull() ?: currentId] ?: currentIndex,
@@ -298,37 +333,131 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     }
 
     /**
-     * Takes [id] out of the queue and makes it the photo on screen.
+     * Gives up the whole queue and makes [id] — the photo the pointer was walked to — the
+     * one on screen.
      *
-     * Only ever called for a photo that has finished loading — or has failed, which is
-     * handled the same way so that one unreadable file cannot stall the queue behind it.
+     * The steps behind it are dropped rather than shown: the queue only records where the
+     * pointer ended up, and three presses right mean "the third photo", not "these three
+     * photos, one after another". Nothing is left waiting, so the corner arrows go with
+     * it.
+     *
+     * Only ever called for a photo that has finished loading — or has failed, or has no
+     * still at all, which are handled the same way so that one unreadable file cannot
+     * stall the queue behind it.
      */
     fun advanceTo(id: Long) {
-        if (pending.firstOrNull() != id) return
-        pending = pending.drop(1)
-        slideshowQueued = slideshowQueued - id
+        if (pending.lastOrNull() != id) return
+        pending = emptyList()
+        slideshowQueued = emptySet()
         frontLayer = 1 - frontLayer
     }
 
     /**
-     * Keeps the hidden layer pointed at the photo the queue is waiting for, and brings
-     * it forward the moment it is there.
+     * Points one layer at [id]'s still, dropping whatever it was holding.
      *
-     * Keyed on the head of the queue rather than the whole queue, so pressing right
-     * again while a photo is still downloading does not cancel that download.
+     * [loadedUrls] is cleared with it. A layer that has been asked for something else no
+     * longer holds the pixels it had, and leaving that claim behind is what used to let
+     * the viewer bring a layer forward believing it was showing a photo it had already
+     * been moved off — a spinner over the wrong picture, with nothing left to resolve it.
      */
-    LaunchedEffect(pending.firstOrNull(), frontLayer, items, loadedIds) {
-        val head = pending.firstOrNull() ?: return@LaunchedEffect
-        val back = 1 - frontLayer
-        when {
-            // Already loaded and waiting off-screen — the photo just paged away from, or
-            // one this layer has held all along. There is nothing to fetch, so the queue
-            // must not sit here waiting for a callback that will never come.
-            loadedIds[back] == head -> advanceTo(head)
+    fun pointLayerAt(layer: Int, id: Long?, url: String?) {
+        layerIds = layerIds.toMutableList().also { it[layer] = id }
+        layerUrls = layerUrls.toMutableList().also { it[layer] = url }
+        loadedUrls = loadedUrls.toMutableList().also { it[layer] = null }
+        // A fresh request for a file deserves a fresh spinner.
+        if (url != null) failedUrls = failedUrls - url
+    }
 
-            layerIds[back] != head ->
-                layerIds = layerIds.toMutableList().also { it[back] = head }
+    /**
+     * Keeps the hidden layer pointed at the photo the queue ends on — or at the original of
+     * the photo already on screen — and brings it forward the moment it is there.
+     *
+     * Keyed on the end of the queue rather than the whole queue, so a step taken back at
+     * the other end — left after right — does not restart the download of a photo that is
+     * still being waited for.
+     */
+    LaunchedEffect(
+        pending.lastOrNull(),
+        originalRequest,
+        frontLayer,
+        items,
+        layerIds,
+        layerUrls,
+        loadedUrls,
+        failedUrls,
+        wantsOriginal,
+    ) {
+        val back = 1 - frontLayer
+        val target = pending.lastOrNull()
+        if (target != null) {
+            val url = stillUrlOf(target)
+
+            // No still at all: the server sent nothing for this entry. Waiting for pixels
+            // that cannot arrive is how the viewer used to stop dead on one file, so the
+            // step is taken at once — the layer is pointed at it so that the band and the
+            // position still agree with what is on screen.
+            if (url == null) {
+                pointLayerAt(back, target, null)
+                advanceTo(target)
+                return@LaunchedEffect
+            }
+
+            val pointed = layerIds[back] == target && layerUrls[back] == url
+            // Already decoded off-screen — the photo just paged away from, or one this
+            // layer has held all along — or already refused. There is nothing to wait for
+            // either way, and the queue must not sit here for a callback that will never
+            // come.
+            if (pointed && (loadedUrls[back] == url || url in failedUrls)) {
+                advanceTo(target)
+                return@LaunchedEffect
+            }
+            if (!pointed) pointLayerAt(back, target, url)
+            return@LaunchedEffect
         }
+
+        // Nothing queued: the back layer's remaining job is the original of the photo that
+        // is already on screen, when the user asked for it at full size.
+        val wanted = originalRequest ?: return@LaunchedEffect
+        // A request is about the photo that was on screen when it was made; the effect
+        // below drops a stale one rather than acting on it.
+        if (layerIds[frontLayer] != wanted) return@LaunchedEffect
+        val url = indexById[wanted]?.let(items::getOrNull)?.fullUrl ?: return@LaunchedEffect
+
+        // Nothing to do: the original is already the thing being looked at (the button is
+        // gone by then, but a request can outlive the moment it was made).
+        if (layerUrls[frontLayer] == url) {
+            originalRequest = null
+            return@LaunchedEffect
+        }
+
+        val pointed = layerIds[back] == wanted && layerUrls[back] == url
+        if (pointed && url in failedUrls) {
+            originalRequest = null
+            notify(context.getString(R.string.viewer_original_failed))
+            return@LaunchedEffect
+        }
+        if (pointed && loadedUrls[back] == url) {
+            // Decoded and out of sight: bring that layer forward. It is the *same* photo, so
+            // the position, the band and the queue stay exactly where they are — only the
+            // layer that is opaque moves, which is what the two of them are for.
+            originalRequest = null
+            frontLayer = back
+            return@LaunchedEffect
+        }
+        if (!pointed) pointLayerAt(back, wanted, url)
+    }
+
+    // A request for the original belongs to the photo that was on screen when it was made:
+    // paging on makes it somebody else's.
+    LaunchedEffect(currentId) {
+        if (originalRequest != null && originalRequest != currentId) originalRequest = null
+    }
+
+    // The 原图 button comes and goes with the photo on screen, and the D-pad follows it:
+    // while there is an original to load, that is the one thing about this photo that
+    // cannot be seen without pressing something.
+    LaunchedEffect(canLoadOriginal) {
+        mainFocus = cornerFocus(canLoadOriginal)
     }
 
     // Party mode. While the slideshow runs the list is re-read every so often, so
@@ -357,7 +486,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // showing: queued photos that are gone are dropped, and a photo that is gone from
     // the screen is replaced by whatever slid into its place. Without this the queue
     // could wait forever on a photo that no longer exists.
-    LaunchedEffect(items) {
+    LaunchedEffect(items, wantsOriginal) {
         val present = items.mapTo(HashSet()) { it.id }
         if (pending.any { it !in present }) {
             pending = pending.filter { it in present }
@@ -367,9 +496,14 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
             resumeSlideshowIfIdle()
         }
 
-        if (layerIds.any { it != null && it !in present }) {
+        val replaced = layerIds.map { it != null && it !in present }
+        if (replaced.any { it }) {
             val fallback = items[positionHint.coerceIn(0, items.lastIndex)].id
-            layerIds = layerIds.map { id -> if (id == null || id in present) id else fallback }
+            val fallbackUrl = stillUrlOf(fallback)
+            layerIds = layerIds.mapIndexed { layer, id -> if (replaced[layer]) fallback else id }
+            layerUrls =
+                layerUrls.mapIndexed { layer, url -> if (replaced[layer]) fallbackUrl else url }
+            loadedUrls = loadedUrls.mapIndexed { layer, url -> if (replaced[layer]) null else url }
         }
     }
 
@@ -455,8 +589,20 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     fun closeSettings() {
         menuOpen = false
         musicListOpen = false
-        onMainButton = true
+        // Back to the corner button the band hands the D-pad to; see [cornerFocus].
+        mainFocus = cornerFocus(canLoadOriginal)
         settingFocus = SETTING_PLAY
+    }
+
+    /**
+     * Asks for the photo on screen at full size, whatever the preview setting says.
+     *
+     * The file is fetched by the layer behind the visible one, so the thumbnail stays up
+     * until the original is decoded and then hands over — no black frame, and the button
+     * breathing is the only progress there is to show.
+     */
+    fun requestOriginal() {
+        if (canLoadOriginal) originalRequest = currentId
     }
 
     /**
@@ -559,9 +705,12 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                 // The track list is a second level inside the settings row: while it is
                 // up, up/down walk the tracks rather than the row, and left/right and
                 // the photo keys are held so that nothing moves underneath it.
+                //
+                // Where the D-pad is: on one of the two buttons in the bottom-right corner,
+                // or inside the settings row they open above themselves — all four of those
+                // are worked out above, where the drawing can read them too.
                 val inMusicList = showInfo && menuOpen && musicListOpen
-                val inSettings = showInfo && menuOpen && !onMainButton && !inMusicList
-                val onSlideshowButton = showInfo && onMainButton
+                val inSettings = showInfo && menuOpen && !inMusicList
 
                 when (event.key) {
                     Key.DirectionLeft -> {
@@ -588,13 +737,18 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                         when {
                             inMusicList -> moveMusicCursor(-1)
                             inSettings -> stepSetting(-1)
+                            // Up walks back through the corner: the 原图 button, then the
+                            // 幻灯片 button, whose up opens the settings row above them.
+                            onOriginalButton -> mainFocus = MAIN_SLIDESHOW
                             onSlideshowButton -> {
                                 menuOpen = true
                                 settingFocus = SETTING_PLAY
-                                onMainButton = false
                             }
 
-                            else -> showInfo = true
+                            else -> {
+                                showInfo = true
+                                mainFocus = cornerFocus(canLoadOriginal)
+                            }
                         }
                         true
                     }
@@ -603,12 +757,19 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                         when {
                             inMusicList -> moveMusicCursor(+1)
                             inSettings -> stepSetting(+1)
-                            onSlideshowButton -> {
+                            // Down walks on through the corner — the 幻灯片 button, then the
+                            // 原图 button beside it — and the last one closes the band.
+                            onSlideshowButton ->
+                                if (canLoadOriginal) mainFocus = MAIN_ORIGINAL
+                                else {
+                                    showInfo = false
+                                    closeSettings()
+                                }
+
+                            else -> {
                                 showInfo = false
                                 closeSettings()
                             }
-
-                            else -> Unit
                         }
                         true
                     }
@@ -621,10 +782,11 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
 
                             inMusicList -> toggleMusicTrack(musicCursor)
 
+                            onOriginalButton -> requestOriginal()
+
                             onSlideshowButton -> {
                                 menuOpen = true
                                 settingFocus = SETTING_PLAY
-                                onMainButton = false
                             }
 
                             else -> activateSetting()
@@ -638,20 +800,22 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     ) {
         // The two layers, back one first so that the visible one is on top. Both are
         // always composed: it is the alpha that moves with a page turn, not the model.
+        //
+        // A layer only records what it decoded. Bringing it forward is the queue's job —
+        // see the effect above — so that one place decides what is on screen, and a
+        // result that arrives for a request the layer has since been moved off cannot
+        // move anything by itself.
         for (layer in 0..1) {
-            val item = layerIds[layer]?.let { id -> indexById[id]?.let(items::getOrNull) }
             PhotoLayer(
-                item = item,
+                url = layerUrls[layer],
                 visible = layer == frontLayer,
-                onReady = { id ->
-                    loadedIds = loadedIds.toMutableList().also { it[layer] = id }
-                    failedIds = failedIds - id
-                    advanceTo(id)
+                onReady = { url ->
+                    loadedUrls = loadedUrls.toMutableList().also { it[layer] = url }
+                    failedUrls = failedUrls - url
                 },
-                onFailed = { id ->
-                    loadedIds = loadedIds.toMutableList().also { it[layer] = null }
-                    failedIds = failedIds + id
-                    advanceTo(id)
+                onFailed = { url ->
+                    loadedUrls = loadedUrls.toMutableList().also { it[layer] = null }
+                    failedUrls = failedUrls + url
                 },
             )
         }
@@ -661,7 +825,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
             if (videoUrl != null) {
                 VideoPlayer(
                     url = videoUrl,
-                    token = token,
+                    streams = viewModel.videoStreams,
                     playWhenReady = videoPlaying,
                     modifier = Modifier.fillMaxSize(),
                     onFinished = { videoPlaying = false },
@@ -693,8 +857,9 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         }
 
         // What the user's own presses are doing, in the corner the eye already goes to
-        // for "next". One arrow per photo still waiting, so three presses right read as
-        // three photos rather than as a single vague "loading". The show's own queue is
+        // for "next". One arrow per step the pointer has been walked, so three presses
+        // right read as three photos rather than as a single vague "loading" — even
+        // though the viewer is only fetching the last of them. The show's own queue is
         // deliberately not counted: seeing it work is the point of a slideshow, and the
         // pictures arriving on their own are not presses anybody made.
         val manualPending = pending.count { it !in slideshowQueued }
@@ -733,12 +898,23 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                     takenAt = formatTakenAt(current.takenAt),
                     details = mediaSubtitle(current.width, current.height, current.fileSize),
                     position = stringResource(R.string.viewer_position, currentIndex + 1, items.size),
+                    // What the eye cannot tell from the picture: the same photograph at
+                    // 1920px and at its own size look alike until you stand up.
+                    quality = when {
+                        current.isVideo -> null
+                        showingOriginal -> originalLabel
+                        else -> thumbnailLabel
+                    },
+                    qualityIsOriginal = showingOriginal,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(32.dp))
                 SlideshowControls(
                     menuOpen = menuOpen,
-                    onMainButton = onMainButton,
+                    onMainButton = onSlideshowButton,
+                    onOriginalButton = onOriginalButton,
+                    originalAvailable = canLoadOriginal,
+                    originalLoading = originalLoading,
                     settingFocus = settingFocus,
                     slideshowRunning = slideshowRunning,
                     slideshowSeconds = slideshowSeconds,
@@ -803,20 +979,20 @@ private val MUSIC_LIST_MAX_HEIGHT = 280.dp
  * exactly the same size, so that when it is brought forward there is nothing left to
  * wait for. `alpha` is used rather than leaving the hidden layer out of the tree, since
  * a layer that is not composed has no image loaded into it at all.
+ *
+ * It draws [url] and nothing else — which still to ask for is the viewer's decision, not
+ * the layer's — and reports the URL it finished with rather than an id, since that is
+ * what the pixels are. A null URL draws nothing and reports nothing: there is no request
+ * to finish.
  */
 @Composable
 private fun PhotoLayer(
-    item: MediaItem?,
+    url: String?,
     visible: Boolean,
-    onReady: (Long) -> Unit,
-    onFailed: (Long) -> Unit,
+    onReady: (String) -> Unit,
+    onFailed: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val id = item?.id
-    // A video's full-size URL is the video itself, so its still is the thumbnail —
-    // never the original.
-    val url = item?.let { if (it.isVideo) it.thumbnailUrl else it.bestStillUrl }
-
     AsyncImage(
         model = url,
         contentDescription = null,
@@ -825,13 +1001,13 @@ private fun PhotoLayer(
             .fillMaxSize()
             .alpha(if (visible) 1f else 0f),
         onSuccess = { state ->
-            // `request.data` rather than the layer's current id: the painter reports
-            // the result of the request it was given, and a layer whose model has just
-            // changed must not mistake the *previous* photo arriving for this one.
-            if (id != null && state.result.request.data == url) onReady(id)
+            // `request.data` rather than the layer's URL: the painter reports the result
+            // of the request it was given, and a layer whose model has just changed must
+            // not mistake the *previous* photo arriving for this one.
+            if (url != null && state.result.request.data == url) onReady(url)
         },
         onError = { state ->
-            if (id != null && state.result.request.data == url) onFailed(id)
+            if (url != null && state.result.request.data == url) onFailed(url)
         },
     )
 }
@@ -897,17 +1073,35 @@ private const val SETTING_ORDER = 2
 private const val SETTING_MUSIC = 3
 private const val SETTING_COUNT = 4
 
+/** The two buttons in the corner, left to right: 原图 and 幻灯片. */
+private const val MAIN_ORIGINAL = 0
+private const val MAIN_SLIDESHOW = 1
+
 /**
- * The bottom-right controls: a 幻灯片 button, and the settings row it opens above
- * itself.
+ * Which corner button the band hands the D-pad to.
+ *
+ * 原图 when there is an original to load, because that is the one thing about the photo on
+ * screen that cannot be seen without pressing something; otherwise 幻灯片, whose OK opens
+ * the row of settings.
+ */
+private fun cornerFocus(canLoadOriginal: Boolean): Int =
+    if (canLoadOriginal) MAIN_ORIGINAL else MAIN_SLIDESHOW
+
+/**
+ * The bottom-right controls: a 原图 button while the preview is a thumbnail, the 幻灯片
+ * button, and the settings row the two of them open above themselves.
  *
  * The controls are not individually focusable — the viewer's root box owns focus and
- * routes the D-pad — so the highlighted one is drawn from [settingFocus] instead.
+ * routes the D-pad — so the highlighted one is drawn from `mainFocus` and [settingFocus]
+ * instead.
  */
 @Composable
 private fun SlideshowControls(
     menuOpen: Boolean,
     onMainButton: Boolean,
+    onOriginalButton: Boolean,
+    originalAvailable: Boolean,
+    originalLoading: Boolean,
     settingFocus: Int,
     slideshowRunning: Boolean,
     slideshowSeconds: Int,
@@ -972,12 +1166,78 @@ private fun SlideshowControls(
             }
         }
 
-        ActionButton(
-            label = stringResource(R.string.viewer_action_slideshow),
-            selected = onMainButton,
-            prominent = true,
+        // The corner itself: 原图 — while there is an original behind the thumbnail on
+        // screen — and then 幻灯片, which is where the settings row above opens from.
+        // Right-aligned as a pair, so 原图 sits to the left of 幻灯片.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (originalAvailable) {
+                OriginalButton(selected = onOriginalButton, loading = originalLoading)
+            }
+            ActionButton(
+                label = stringResource(R.string.viewer_action_slideshow),
+                selected = onMainButton,
+                prominent = true,
+            )
+        }
+    }
+}
+
+/**
+ * 原图: fetch the photo on screen at full size even though the preview setting says
+ * thumbnail, or the slideshow has not reached it yet.
+ *
+ * It breathes while the file is on its way, which is the only progress there is to show:
+ * the thumbnail underneath deliberately stays where it is until the original has been
+ * decoded, so there is no half-drawn picture to look at instead.
+ */
+@Composable
+private fun OriginalButton(selected: Boolean, loading: Boolean) {
+    val shape = RoundedCornerShape(10.dp)
+    val primary = MaterialTheme.colorScheme.primary
+
+    Box(
+        modifier = Modifier
+            .alpha(pulseAlpha(loading))
+            .clip(shape)
+            .background(if (selected) primary else Color(0xCC101826))
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) primary else Color(0x33FFFFFF),
+                shape = shape,
+            )
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.viewer_action_original),
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White,
         )
     }
+}
+
+/**
+ * A control's own pulse, 1f when there is nothing to announce.
+ *
+ * Always composed, and asked for the value it should take: a transition started inside an
+ * `if` would break the rule that a composable is called the same way every time, and the
+ * breathing is the whole of the "still loading" signal.
+ */
+@Composable
+private fun pulseAlpha(active: Boolean): Float {
+    val transition = rememberInfiniteTransition(label = "busy")
+    val pulse by transition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pulse",
+    )
+    return if (active) pulse else 1f
 }
 
 /**
@@ -1177,19 +1437,30 @@ private fun InfoText(
     takenAt: String,
     details: String,
     position: String,
+    quality: String?,
+    qualityIsOriginal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.titleLarge,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                // Only as wide as it needs, so the pill sits against the name rather than
+                // against a stretched-out text box.
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (quality != null) QualityPill(quality, original = qualityIsOriginal)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             if (takenAt.isNotBlank()) {
                 Text(
@@ -1211,6 +1482,31 @@ private fun InfoText(
             text = position,
             style = MaterialTheme.typography.labelMedium,
             color = Color.White.copy(alpha = 0.65f),
+        )
+    }
+}
+
+/**
+ * 原图 or 缩略图, beside the file name.
+ *
+ * A pill rather than another line of text: it is a property of the picture, not of the
+ * file, and it has to be readable at the distance a sofa is from a television.
+ */
+@Composable
+private fun QualityPill(label: String, original: Boolean) {
+    val shape = RoundedCornerShape(6.dp)
+    val accent = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .background(if (original) accent.copy(alpha = 0.22f) else Color(0x33FFFFFF))
+            .border(1.dp, if (original) accent else Color(0x33FFFFFF), shape)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (original) accent else Color.White.copy(alpha = 0.85f),
         )
     }
 }

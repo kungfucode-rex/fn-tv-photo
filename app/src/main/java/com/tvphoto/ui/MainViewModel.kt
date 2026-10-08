@@ -5,8 +5,10 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.media3.datasource.DataSource
 import com.tvphoto.TvPhotoApp
 import com.tvphoto.data.AppContainer
+import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SavedAccount
 import com.tvphoto.data.SessionState
 import com.tvphoto.data.ThemeMode
@@ -133,6 +135,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --------------------------------------------------------------- settings
     private val _slideshowSeconds = MutableStateFlow(container.settings.slideshowSeconds)
     val slideshowSeconds: StateFlow<Int> = _slideshowSeconds.asStateFlow()
+
+    private val _previewOriginal = MutableStateFlow(container.settings.previewOriginal)
+    val previewOriginal: StateFlow<PreviewOriginal> = _previewOriginal.asStateFlow()
 
     private val _slideshowShuffled = MutableStateFlow(container.settings.slideshowShuffled)
     val slideshowShuffled: StateFlow<Boolean> = _slideshowShuffled.asStateFlow()
@@ -631,6 +636,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _slideshowSeconds.value = container.settings.slideshowSeconds
     }
 
+    /**
+     * Which still full-screen previews draw, original or large thumbnail.
+     *
+     * Read back from the store rather than echoing what was asked for, like the music
+     * selection: the setting persisted is what the UI then claims.
+     */
+    fun setPreviewOriginal(mode: PreviewOriginal) {
+        container.settings.previewOriginal = mode
+        _previewOriginal.value = container.settings.previewOriginal
+    }
+
     /** Order the slideshow advances in. Persisted, so 随机 survives a restart. */
     fun setSlideshowShuffled(shuffled: Boolean) {
         container.settings.slideshowShuffled = shuffled
@@ -691,22 +707,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Warms the disk cache with the next [ImagePrefetcher.DEFAULT_LIMIT] full-size
-     * images **starting at [fromIndex]** — the photo the user is looking at, not the
-     * top of the list, so paging forward is what gets accelerated.
+     * Warms the disk cache with the stills the viewer will ask for next, starting at
+     * [fromIndex] — the photo the user is looking at, not the top of the list, so paging
+     * forward is what gets accelerated.
+     *
+     * [original] is handed in rather than read from the setting here: whether a preview
+     * is the original depends on whether the slideshow is running, and that is a fact
+     * about the screen, not about the preference. Warming the tier the viewer will not
+     * ask for would fill the cache with files nothing reads and leave the ones it needs
+     * on the wire.
      *
      * Suspending rather than launching internally on purpose: the caller owns the
      * job, so navigating away cancels the outstanding downloads. Videos are filtered
      * out — only stills belong in the image cache.
      */
-    suspend fun warmImageCache(items: List<MediaItem>, fromIndex: Int) {
-        val originals = items.asSequence()
+    suspend fun warmImageCache(items: List<MediaItem>, fromIndex: Int, original: Boolean) {
+        val stills = items.asSequence()
             .drop(fromIndex.coerceAtLeast(0))
             .filterNot { it.isVideo }
-            .mapNotNull { it.fullUrl }
+            .mapNotNull { it.stillUrl(original) }
             .toList()
-        container.prefetcher.prefetch(originals)
+        container.prefetcher.prefetch(stills)
     }
+
+    /**
+     * Where the video player reads a clip from: the app's own client, so the stream
+     * carries the token, the cookie and the pinned certificate like every image does.
+     *
+     * A plain value rather than state — the player is rebuilt from its URL, and this must
+     * not be a reason to rebuild it.
+     */
+    val videoStreams: DataSource.Factory get() = container.videoStreams
 
     /**
      * Current image-cache usage and ceiling, in bytes.

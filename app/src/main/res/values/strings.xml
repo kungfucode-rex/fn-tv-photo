@@ -70,6 +70,10 @@
     <string name="viewer_playing">播放中</string>
     <string name="viewer_paused">已暂停</string>
     <string name="viewer_action_slideshow">幻灯片</string>
+    <string name="viewer_action_original">原图</string>
+    <string name="viewer_quality_original">原图</string>
+    <string name="viewer_quality_thumbnail">缩略图</string>
+    <string name="viewer_original_failed">原图加载失败</string>
     <string name="viewer_action_play">播放</string>
     <string name="viewer_action_pause">暂停</string>
     <string name="viewer_interval_option">%1$d秒</string>
@@ -97,6 +101,11 @@
     <string name="settings_sign_mode_hint">默认自动协商。若列表一直报签名错误，可手动切换。</string>
     <string name="settings_slideshow_interval">幻灯片间隔</string>
     <string name="settings_slideshow_interval_value">%1$d 秒</string>
+    <string name="settings_preview_original">预览原图</string>
+    <string name="settings_preview_original_yes">是</string>
+    <string name="settings_preview_original_no">否</string>
+    <string name="settings_preview_original_slideshow">仅用于幻灯片播放</string>
+    <string name="settings_preview_original_hint">原图更清晰；大缩略图加载更快、更省流量。</string>
     <string name="settings_cache">清除图片缓存</string>
     <string name="settings_cache_cleared">缓存已清除</string>
     <string name="settings_cache_usage">已用 %1$s / %2$s</string>

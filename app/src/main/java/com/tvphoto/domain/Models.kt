@@ -19,9 +19,41 @@ data class MediaItem(
     /** Live Photos only get their motion badge when the clip is actually indexed. */
     val hasMotionClip: Boolean get() = isLivePhoto && !videoUrl.isNullOrBlank()
 
-    val bestStillUrl: String? get() = fullUrl ?: thumbnailUrl
+    /**
+     * The still the viewer draws for this entry.
+     *
+     * [original] picks the file itself over the server's ~1920px thumbnail, which is
+     * what the preview setting decides — see `PreviewOriginal`. Each falls back to the
+     * other, because a server that sent only one of the two still has a picture to show.
+     *
+     * A clip has no still of its own: the player draws the video over this, so its
+     * answer is the thumbnail either way.
+     */
+    fun stillUrl(original: Boolean): String? = when {
+        isVideo -> thumbnailUrl
+        original -> fullUrl ?: thumbnailUrl
+        else -> thumbnailUrl ?: fullUrl
+    }
 
     val bestVideoUrl: String? get() = videoUrl ?: fullUrl
+
+    /**
+     * Whether [url] is this entry's own file rather than a thumbnail of it.
+     *
+     * A clip never is: what plays for one is the video itself, not a still, so there is no
+     * still to call the original.
+     */
+    fun isOriginalStill(url: String?): Boolean = !isVideo && url != null && url == fullUrl
+
+    /**
+     * True when there is an original worth fetching — one the server sent, and one that is
+     * not the thumbnail itself.
+     *
+     * A NAS that answers with the same URL for both tiers has nothing to move to, and a
+     * button offering to fetch it would do nothing when pressed.
+     */
+    val hasDistinctOriginal: Boolean
+        get() = !isVideo && fullUrl != null && fullUrl != thumbnailUrl
 
     val aspectRatio: Float
         get() = if (width > 0 && height > 0) width.toFloat() / height.toFloat() else 16f / 9f

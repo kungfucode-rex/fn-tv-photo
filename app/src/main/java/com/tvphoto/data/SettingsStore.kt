@@ -53,6 +53,18 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         set(value) = prefs.edit().putInt(KEY_SLIDESHOW, value.coerceIn(2, 120)).apply()
 
     /**
+     * Whether full-screen previews draw the original file or the large thumbnail.
+     *
+     * Persisted like the interval: this is a decision about the link to the NAS — a LAN
+     * or a connection over the internet — and it has to survive a restart, because the
+     * first preview after a restart is the one it exists for.
+     */
+    var previewOriginal: PreviewOriginal
+        get() = PreviewOriginal.fromId(prefs.getString(KEY_PREVIEW_ORIGINAL, null))
+            ?: PreviewOriginal.DEFAULT
+        set(value) = prefs.edit().putString(KEY_PREVIEW_ORIGINAL, value.id).apply()
+
+    /**
      * Whether the slideshow picks each next photo at random rather than in order.
      *
      * Persisted like the interval: someone who chooses 随机 expects it to still be
@@ -168,6 +180,7 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         private const val KEY_SIGN_MODE = "sign_mode"
         private const val KEY_THEME = "theme_mode"
         private const val KEY_SLIDESHOW = "slideshow_seconds"
+        private const val KEY_PREVIEW_ORIGINAL = "preview_original"
         private const val KEY_SHUFFLE = "slideshow_shuffled"
         private const val KEY_MUSIC = "slideshow_music"
         private const val DEFAULT_SLIDESHOW_SECONDS = 8

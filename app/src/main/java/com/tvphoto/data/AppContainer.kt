@@ -2,6 +2,7 @@ package com.tvphoto.data
 
 import android.content.Context
 import android.util.Log
+import androidx.media3.datasource.DataSource
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
@@ -78,6 +79,16 @@ class AppContainer(context: Context) {
     /** Shared by Coil and Media3 so thumbnails and video carry the token and cookie. */
     val mediaHttp: OkHttpClient =
         FnHttp.mediaClient(cookieJar, { sessions.token }, certificateTrust)
+
+    /**
+     * Where the viewer's video player reads from.
+     *
+     * The same client the images go through, rather than a connection of the player's
+     * own: the NAS certificate is pinned rather than issued by a trusted root, the
+     * 访问码 travels as a cookie and the stream is authorised by the `AccessToken`
+     * header. See [OkHttpDataSource].
+     */
+    val videoStreams: DataSource.Factory = OkHttpDataSource.Factory(mediaHttp)
 
     val signMode: SignMode get() = signedHttp.currentSignMode
 

@@ -61,6 +61,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 fun GalleryScreen(viewModel: MainViewModel, screen: Screen) {
     val gallery by viewModel.gallery.collectAsStateWithLifecycle()
     val media = gallery.items.valueOrNull.orEmpty()
+    val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
     val memory = rememberPositionMemory(screen.cacheKey, viewModel)
     val fallbackFocus = remember { FocusRequester() }
@@ -90,10 +91,16 @@ fun GalleryScreen(viewModel: MainViewModel, screen: Screen) {
 
     // Warm the disk cache ahead of the current position, so opening or paging through
     // a photo does not wait on the network.
+    //
+    // The same still the viewer will ask for when it opens on one of these, which is the
+    // large thumbnail unless every preview is set to the original: warming a tier nothing
+    // reads would leave the one it does read on the wire.
     PrefetchAhead(
         itemCount = media.size,
         anchor = anchor,
-        prefetch = { from -> viewModel.warmImageCache(media, from) },
+        prefetch = { from ->
+            viewModel.warmImageCache(media, from, previewOriginal.wantsOriginal(false))
+        },
     )
 
     // Restore where the user was, or focus the first thing on a first visit. This is

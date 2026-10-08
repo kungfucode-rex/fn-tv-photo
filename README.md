@@ -104,26 +104,26 @@
 
 已经签名打包好的 APK 挂在 GitHub Release 上，直接下载就行，不必自己构建：
 
-**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** —— `FN-tvphoto-1.3.apk`，65.7 MiB，SHA-256 `42BE4EBE60E92D20A1D05776013161F23919847A5D96A198068AECE9DCF255AF`（Release 说明里也写着）。同一份文件也会出现在下面的共享目录里，两处是同一个包。
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** —— `FN-tvphoto-1.3.1.apk`，65.7 MiB，SHA-256 `CFBF6A183541E712E9DEF78716FA3CE2A0CC2E754F172D5ED2BB0DF297C2CF92`（Release 说明里也写着）。同一份文件也会出现在下面的共享目录里，两处是同一个包。
 
 想自己构建：
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/FN-tvphoto-1.3.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3-20261008-140444.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3.1-20261008-141816.apk
 ```
 
 一次构建 APK 的运行**同时会把它上传到电视安装时所用的共享目录**（`tools/publish-apk.ps1`），并把副本读回来比对哈希。构建与发布有意合成一步：这样 NAS 上的文件不会落后于源码，也没人需要记得去复制。默认只发布 **release** —— debug APK 是给模拟器用的，而一个大家用来安装的目录里多放一个文件，只会让人装错。`-NoPublish` 只构建，`-PublishVariants @('release','debug')` 两个都发，`-PublishDestination <path>` 发到别处。共享目录休眠或未认证不会让构建失败 —— 它会告警，而 APK 仍在 `app/build/outputs/apk/`。
 
-release APK 的文件名带的是**应用名 + 版本号**，而不是 Gradle 变体名 —— `FN-tvphoto-1.3.apk`。版本号在 `app/build.gradle.kts` 里只写一次（`appVersionName`），manifest、设置页和文件名都跟着它走，改版本号时文件名一起变。之所以不用 `app-release.apk`：文件躺在电视的下载目录里时，它根本说明不了自己是哪个应用、哪一版。共享目录上的名字再带上 APK 自己的**构建时间** —— `FN-tvphoto-1.3-<yyyyMMdd-HHmmss>.apk` —— 这样旧构建还在、可以回退，也不会有东西被悄悄覆盖。时间戳取自文件时间而非上传时的时钟，所以重新发布同一个 APK 会复用同一个名字，而不会堆出重复文件。`tools/publish-apk.ps1` 和 `tools/tv.ps1` 都按 `FN-tvphoto-*.apk` 取最新的那个，所以版本号在这两个脚本里不需要重复一遍。不带时间戳的同名文件，以及旧方案残留的 `app-<variant>.apk`，都会被删除，但**仅在**能证明它与刚发布的副本字节相同时；否则原样保留并报告。
+release APK 的文件名带的是**应用名 + 版本号**，而不是 Gradle 变体名 —— `FN-tvphoto-1.3.1.apk`。版本号在 `app/build.gradle.kts` 里只写一次（`appVersionName`），manifest、设置页和文件名都跟着它走，改版本号时文件名一起变。之所以不用 `app-release.apk`：文件躺在电视的下载目录里时，它根本说明不了自己是哪个应用、哪一版。共享目录上的名字再带上 APK 自己的**构建时间** —— `FN-tvphoto-1.3.1-<yyyyMMdd-HHmmss>.apk` —— 这样旧构建还在、可以回退，也不会有东西被悄悄覆盖。时间戳取自文件时间而非上传时的时钟，所以重新发布同一个 APK 会复用同一个名字，而不会堆出重复文件。`tools/publish-apk.ps1` 和 `tools/tv.ps1` 都按 `FN-tvphoto-*.apk` 取最新的那个，所以版本号在这两个脚本里不需要重复一遍。不带时间戳的同名文件，以及旧方案残留的 `app-<variant>.apk`，都会被删除，但**仅在**能证明它与刚发布的副本字节相同时；否则原样保留并报告。
 
 两个构建脚本都刻意保持**纯 ASCII**。Windows PowerShell 会把 `.ps1` 按 ANSI 解码，除非文件带 UTF-8 BOM，于是脚本里字面量 `软件` 会变成乱码，每次复制都以 "share is not reachable" 失败 —— 这正是这段代码第一次写出来时发生的事，后来又在一条告警消息里以一个乱码破折号重演。因此共享目录名是用 `[char]0x8F6F + [char]0x4EF6` 拼出来的，两个脚本里都没有任何消息使用 ASCII 之外的字符。
 
 然后在电视上安装：
 
 ```bash
-adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
 ```
 
 release 构建用 `app/tvphoto.jks` 签名。该密钥库**不在**版本控制中；请先生成一个（或者让 debug 构建用自己的密钥）：

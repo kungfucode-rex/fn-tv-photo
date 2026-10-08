@@ -326,8 +326,8 @@ press at a time.
 
 A signed APK is on the GitHub release page, so building it is optional:
 
-**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.apk`,
-65.7 MiB, SHA-256 `42BE4EBE60E92D20A1D05776013161F23919847A5D96A198068AECE9DCF255AF` (the
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.1.apk`,
+65.7 MiB, SHA-256 `CFBF6A183541E712E9DEF78716FA3CE2A0CC2E754F172D5ED2BB0DF297C2CF92` (the
 release notes quote it too). The same file also lands in the share described below; the two
 are one build.
 
@@ -335,8 +335,8 @@ To build it yourself:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/FN-tvphoto-1.3.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3-20261008-140444.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3.1-20261008-141816.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -350,12 +350,12 @@ authenticated does not fail the build — it warns, and the APK is still in
 `app/build/outputs/apk/`.
 
 The release APK is named after the app **and its version** rather than after the Gradle
-variant — `FN-tvphoto-1.3.apk`. The version string is written once, as `appVersionName` in
+variant — `FN-tvphoto-1.3.1.apk`. The version string is written once, as `appVersionName` in
 `app/build.gradle.kts`; the manifest, the settings screen and the file name all take it from
 there, so bumping the version renames the artifact with it. `app-release.apk` was the
 alternative, and it says nothing about which app or which version the file is once it is
 sitting in a TV's download folder. The name on the share then carries that APK's own **build
-time** — `FN-tvphoto-1.3-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
+time** — `FN-tvphoto-1.3.1-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
 to and nothing is silently overwritten. The stamp comes from the file's timestamp rather
 than the clock at upload, so re-publishing the same APK reuses the same name instead of
 piling up duplicates. `tools/publish-apk.ps1` and `tools/tv.ps1` take the newest file
@@ -374,7 +374,7 @@ script uses a character outside ASCII.
 Then install it on the TV:
 
 ```bash
-adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
 ```
 
 The release build is signed with `app/tvphoto.jks`. That keystore is **not** in

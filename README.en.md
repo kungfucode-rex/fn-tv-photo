@@ -237,7 +237,7 @@ disk cache and nothing else: the app runs memory-only, and says so in the log.
 | Key | Timeline / Albums / Folders | Viewer |
 | --- | --- | --- |
 | D-pad | move focus | — |
-| ← / → | — | previous / next photo; picks a control when the slideshow row is open |
+| ← / → | — | previous / next photo; picks a control when the slideshow row is open, or when both 原图 and 幻灯片 are in the corner |
 | ↑ / ↓ | — | show / hide the information band; once up, they walk the corner: 原图 → 幻灯片 → the settings row; changes the value when a stepper is selected |
 | OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the highlighted control |
 | Back | up one level | close the slideshow row if it is open, otherwise leave the viewer |
@@ -276,9 +276,13 @@ screen is a thumbnail and the server sent an original, **原图** appears to the
 button breathes, the file is downloaded by the layer behind the visible one, and the
 moment it arrives it is swapped in (no black frame), the button goes and the D-pad is back
 on 幻灯片. ↑/↓ walk 原图 → 幻灯片 → the band itself (closing it), and ↑ from 幻灯片 is what
-opens the settings row above. ←/→ page exactly as they always did, band open or closed. A
-clip is not part of this: its "original" is the stream itself, which the player is already
-playing, so the corner never offers 原图 for one and the band says nothing about quality.
+opens the settings row above. **While the 原图 button is up, ←/→ belong to that row** — the
+same rule the settings row follows — switching between the two buttons instead of turning the
+page: two buttons side by side are read as a row, and a row is what left/right move in. Paging
+with the band open is a press of ↓ first, which closes it. With only 幻灯片 in the corner (the
+original is already on screen, or a clip is) ←/→ page as they always did. A clip is not part of
+this either: its "original" is the stream itself, which the player is already playing, so the
+corner never offers 原图 for one and the band says nothing about quality.
 
 **The show walks photos and nothing else.** A clip in the rotation would stop the advance
 and talk over the music playing underneath it, so the next picture is chosen by looking
@@ -323,7 +327,7 @@ press at a time.
 A signed APK is on the GitHub release page, so building it is optional:
 
 **<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.apk`,
-65.7 MiB, SHA-256 `9027752A2414CD8ACB08C4EB35FEFDE8BFB14060D56507BDF6D7B354A32451DD` (the
+65.7 MiB, SHA-256 `42BE4EBE60E92D20A1D05776013161F23919847A5D96A198068AECE9DCF255AF` (the
 release notes quote it too). The same file also lands in the share described below; the two
 are one build.
 
@@ -332,7 +336,7 @@ To build it yourself:
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
 # -> app/build/outputs/apk/release/FN-tvphoto-1.3.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3-20261008-134718.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3-20261008-140444.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -608,7 +612,11 @@ verification was built deliberately:
     and the button back in the corner (←/→ still page), and stepping onto the clip offered
     neither — its original is the stream already playing. `StillUrlTest` pins the two
     premises of that rule off the device: one URL serving both tiers counts as the original
-    and offers no button, and a clip never has an original still to move to.
+    and offers no button, and a clip never has an original still to move to. **Where ←/→
+    belong** was settled on that emulator too: on `1 / 15`, ← moved the highlight to 幻灯片
+    with the photo **standing still** and → brought it back to 原图 (with both buttons up,
+    left/right are that row's), while with only 幻灯片 in the corner — the clip parked on
+    `3 / 15` — → still turned the page, landing on `4 / 15`.
 
 Two bugs were found only by testing the way a user actually would:
 

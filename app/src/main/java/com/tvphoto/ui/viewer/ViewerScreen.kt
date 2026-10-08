@@ -248,6 +248,16 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         mainFocus == MAIN_ORIGINAL
 
     /**
+     * True while the corner holds *both* buttons — 原图 and 幻灯片.
+     *
+     * Left and right then belong to that pair rather than to the page turn, exactly as they
+     * belong to the settings row while it is open: two buttons side by side are read as a
+     * row, and a row is what left/right move in. Paging with the band open is a press of
+     * down first, which closes it.
+     */
+    val cornerPair = showInfo && !menuOpen && canLoadOriginal
+
+    /**
      * True while the picture on screen has not been decoded yet, which is the viewer
      * opening on it or the list changing underneath it. A page turn never sets it: the
      * photo being left stays up until the next one is ready.
@@ -719,6 +729,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                             inSettings ->
                                 settingFocus = (settingFocus - 1 + SETTING_COUNT) % SETTING_COUNT
 
+                            cornerPair -> mainFocus = otherCorner(mainFocus)
                             else -> queueStep(-1)
                         }
                         true
@@ -728,6 +739,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                         when {
                             inMusicList -> Unit
                             inSettings -> settingFocus = (settingFocus + 1) % SETTING_COUNT
+                            cornerPair -> mainFocus = otherCorner(mainFocus)
                             else -> queueStep(1)
                         }
                         true
@@ -1086,6 +1098,16 @@ private const val MAIN_SLIDESHOW = 1
  */
 private fun cornerFocus(canLoadOriginal: Boolean): Int =
     if (canLoadOriginal) MAIN_ORIGINAL else MAIN_SLIDESHOW
+
+/**
+ * The other button in the corner.
+ *
+ * With two of them, either arrow switches to the one the D-pad is not on: a pair has no
+ * "beyond the end" to clamp at, and a press that does nothing at all would read as a
+ * key that is broken rather than as a row that has run out.
+ */
+private fun otherCorner(focus: Int): Int =
+    if (focus == MAIN_ORIGINAL) MAIN_SLIDESHOW else MAIN_ORIGINAL
 
 /**
  * The bottom-right controls: a 原图 button while the preview is a thumbnail, the 幻灯片

@@ -61,16 +61,14 @@
 
 **附件里的 APK 就是最新版，直接下附件最省事**（25.6 MiB）。也可以从发布页下：
 
-- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kungfu%63ode/fn-tv-photo/releases/latest`
-- GitHub：`https://github.com/kungfu%63ode-rex/fn-tv-photo/releases/latest`
+- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kung fu code/fn-tv-photo/releases/latest`
+- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo/releases/latest`
 
-> 网址里的 `%63` 就是字母 c：论坛会把 `kungfu` 里的两个字母自动打码掉，写成 `%63` 就能绕开，而浏览器和服务器都会自动还原它，点开是同一个页面（实测两个站点都 302 到最新版那个 tag）。**万一链接还是打不开，直接下帖子附件就行。**
->
-> 帖子里别的地方（比如下面的包名）如果出现 `**`，是同一个原因 —— `kung**code` 读作 `kungfu` 接 `code`，那两处没法用 `%63` 绕（包名不是网址），照着读就行。
+> 这两个网址要**去掉中间的空格**再访问：论坛会把用户名里连在一起的那两个字母自动打码，拆开写才能正常显示（下面的包名同理）。**懒得改就直接下帖子附件 —— 附件里的就是这一版。**
 
 版本信息：
 
-- 文件名 `FN-tvphoto-1.3.7.apk`，26,817,782 字节（25.6 MiB），包名 `com.kungfucode.fntvphoto`
+- 文件名 `FN-tvphoto-1.3.7.apk`，26,817,782 字节（25.6 MiB），包名 `com.kung fu code.fntvphoto`（去掉空格）
 - SHA-256：`8DA29D5A2E7354243E818ED38C1810D77C4990A8FB65CD51ED51D7AC2F876923`
 - 两个站点的包逐字节相同
 
@@ -112,10 +110,10 @@
 
 ## 七、开源地址
 
-- Gitee（国内下载 + 镜像）：`https://gitee.com/kungfu%63ode/fn-tv-photo`
-- GitHub：`https://github.com/kungfu%63ode-rex/fn-tv-photo`
+- Gitee（国内下载 + 镜像）：`https://gitee.com/kung fu code/fn-tv-photo`
+- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo`
 
-（`%63` 就是字母 c，用来躲开论坛对 `kungfu` 的自动打码；点开是同一个页面。）
+（同样要**去掉空格**。发布页下载链接见上面「怎么装」一节。）
 
 实现过程和踩过的坑都写在 README 里了（这套接口的握手、签名、访问码、自签证书怎么处理，以及升级检测为什么不用 GitHub API），欢迎 star、提 issue、提 PR。
 

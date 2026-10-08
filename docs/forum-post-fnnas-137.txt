@@ -18,20 +18,21 @@
 现象：`kungfucode` 里的两个字母被论坛自动屏蔽，`https://github.com/kungfucode` 变成
 `https://github.com/kung**code`，链接就点不开了。
 
-已经实测过的三条路（2026-10-08 实测，含大小写那条**失败**的结果）：
+已经实测过的四条路（2026-10-08）：
 
 1. ~~改大小写~~ —— **不行**。写成 `kungFuCode` 一样被打码，说明论坛的过滤不区分大小写。
    （两个站点本身是认大小写的：`github.com/kungFuCode-rex/…` 与 `gitee.com/kungFuCode/…` 都返回
    200，`releases/latest` 也照常 302 —— 所以这条本来能用，只是被过滤挡住了。）
-2. **把 c 写成 %63（当前正文用的就是这个）**：`https://github.com/kungfu%63ode-rex/fn-tv-photo`。
-   HTTP 层会解码 `%63`，实测：
-     · github.com/kungfu%63ode-rex/fn-tv-photo/releases/latest  → 302 到 /releases/tag/v1.3.7
-     · gitee.com/kungfu%63ode/fn-tv-photo/releases/latest       → 302 到 /releases/tag/v1.3.7
-     · github.com/kungfu%63ode-rex/fn-tv-photo/releases/tag/v1.3.7 → 200
-   不依赖大小写，原始文本里也没有敏感串，所以过滤抓不到。
-   注意：**Gitee 的 raw 文件路径不能这么写**（`…/raw/master/version.json` 会 404），
-   所以只用在页面链接上，别用在直链文件上。
-3. **换地址（根本解法）**：把仓库转到一个名字干净的组织，例如 `fn-photo`，地址变成
+2. **拆开写 + 标注「去掉空格」（当前正文用的是这个，也是 1.2 那帖验证过的写法）**：
+   `https://github.com/kung fu code-rex/fn-tv-photo`（网址需去掉空格）。
+   好处是与 1.2 那帖一致、读者熟悉；代价是**不能直接点**，所以正文把「下附件」放在前面当主路径。
+   注意：正文里这类地址都放在反引号（代码格式）里，免得论坛只把空格前那半截 `https://github.com/kung`
+   自动变成链接。
+3. **把 c 写成 %63**（备选，实测通过）：`https://github.com/kungfu%63ode-rex/fn-tv-photo/releases/latest`
+   → 302 到 `/releases/tag/v1.3.7`；Gitee 同样 → 302。不依赖大小写，原始文本里也没有敏感串。
+   好处是**能直接点**；代价是地址看起来怪，而且 **Gitee 的 raw 文件路径不能这么写**（会 404），
+   只能用在页面链接上。要是哪次觉得拆开写太啰嗦，就换回这一条。
+4. **换地址（根本解法）**：把仓库转到一个名字干净的组织，例如 `fn-photo`，地址变成
    `https://github.com/fn-photo/fn-tv-photo` 与 `https://gitee.com/fn-photo/fn-tv-photo`，
    两个都不含敏感串，以后每帖都能直接点。
    代价与风险：应用里两处硬编码的清单地址（`UpdateChecker` 的 SOURCES）、
@@ -88,9 +89,9 @@
       匿名下载实测 12.5 秒、哈希与清单一致（Gitee 的 raw 清单有 60 秒 CDN 缓存，属正常）。
   [x] 两个站点的升级清单都指向各自站点的附件，应用取更新的那个 —— 所以两边必须一起发；
       这次已经一致（都是 1.3.7 / versionCode 11 / 同一个 SHA-256）。
-  [ ] **先发预览看一眼网址**。现在正文用的是 `kungfu%63ode`（`%63` = 字母 c）：
-      没被打码、点开能到发布页就成了；如果连它都被吃掉，就只剩「APK 传成论坛附件」这条路
-      （正文已经写明附件就是最新版，所以不影响下载）。
+  [ ] **先发预览看一眼网址**。现在正文用的是拆开写的 `kung fu code` +「去掉空格」标注
+      （1.2 那帖验证过的写法）：确认没被打码就成了。嫌不能直接点的话，
+      可以换回上一节第 3 条的 `%63` 写法（实测可点）；再不放心就直接下附件。
   [ ] **25.6 MiB 的 APK 传成论坛附件**：上传前看一眼「附件」按钮旁的上限提示。
   [ ] **内置音乐是四首商业录音**（见正文「已知限制」）。1.2 那帖就标了这条，仍未解决：
       要么接受、要么替换成可自由分发的曲目再打包。发帖前自己拿主意。

@@ -7,11 +7,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.media3.datasource.DataSource
 import com.tvphoto.TvPhotoApp
+import com.tvphoto.BuildConfig
+import com.tvphoto.data.ApkInstaller
 import com.tvphoto.data.AppContainer
 import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SavedAccount
 import com.tvphoto.data.SessionState
 import com.tvphoto.data.ThemeMode
+import com.tvphoto.data.UpdateCheckResult
+import com.tvphoto.data.UpdateRelease
 import com.tvphoto.data.accountFor
 import com.tvphoto.data.fn.SignMode
 import com.tvphoto.domain.AlbumItem
@@ -156,6 +160,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _signMode = MutableStateFlow(container.signMode)
     val signMode: StateFlow<SignMode> = _signMode.asStateFlow()
+
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+
+    /**
+     * When the last check was started, so that walking past the settings screen cannot
+     * turn into a request every time. In memory only: what it guards against is a user
+     * moving around one session, and a restart is reason enough to ask again.
+     */
+    private var lastUpdateCheckAt = 0L
 
     // Read live rather than snapshotted at construction: after a successful sign-in
     // the credentials have just been persisted, and the login screen must prefill
@@ -686,6 +700,186 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _signMode.value = mode
     }
 
+    // ------------------------------------------------------------ update check
+
+    /**
+     * The release page, for the row's manual fallback.
+     *
+     * Shown as text rather than opened: a television is the one device in the house that
+     * usually has no browser, and this app will not pretend otherwise. It is meant to be
+     * read out and typed somewhere else, like the crash summary above it.
+     */
+    val updateReleasePageUrl: String get() = container.updates.releasePageUrl
+
+    /**
+     * The check the settings screen runs by itself the moment it appears.
+     *
+     * The states a fresh check must never overwrite are the ones the user is in the
+     * middle of - a download in progress, or an answer they have not acted on yet.
+     *
+     * Of the rest, only "already up to date" is throttled, because it is the one answer
+     * that cannot change because someone looked again. Coming back to this screen after a
+     * failure asks immediately: the last answer did not do, the user walked back here
+     * anyway, and a download or a verification can fail precisely because the answer was
+     * stale - a manifest attached after the tag went out, a truncated upload fixed an hour
+     * later. Nothing is risked by asking: a file that already verified is still on disk
+     * and is reused rather than fetched again (see [beginInstall]).
+     */
+    fun autoCheckForUpdate() {
+        val state = _update.value
+        val reAskable = state is UpdateState.Idle || state is UpdateState.Failed
+        if (!reAskable && state !is UpdateState.UpToDate) return
+        if (!reAskable && System.currentTimeMillis() - lastUpdateCheckAt < UPDATE_CHECK_INTERVAL_MS) return
+        checkForUpdate()
+    }
+
+    /**
+     * Asks the release page what the newest published version is.
+     *
+     * Refuses to start while one is in flight: on a television OK can be pressed as fast
+     * as the remote allows, and two requests racing each other would let the slower,
+     * older answer be the one left on screen.
+     */
+    fun checkForUpdate() {
+        if (_update.value.isBusy) return
+        lastUpdateCheckAt = System.currentTimeMillis()
+        _update.value = UpdateState.Checking
+        viewModelScope.launch {
+            when (val result = container.updates.check()) {
+                is UpdateCheckResult.Newer -> _update.value = UpdateState.Available(result.release)
+                UpdateCheckResult.UpToDate ->
+                    _update.value = UpdateState.UpToDate(BuildConfig.VERSION_NAME)
+                is UpdateCheckResult.Failed -> {
+                    // On the log *and* on the row. A television's user cannot act on a DNS
+                    // failure by name, but they can read it out to somebody who can - which
+                    // is exactly what the crash summary above it is for.
+                    Log.w(TAG, "update check failed: ${result.reason}")
+                    _update.value = UpdateState.Failed(UpdateState.Failed.Kind.CHECK, detail = result.reason)
+                }
+            }
+        }
+    }
+
+    /**
+     * What OK on the 检测升级 row means, which is wherever the last attempt left off.
+     *
+     * A single entry point on purpose. The row is the whole interface - there is no
+     * dialog and no second button - so "press OK again" has to be the retry for a failed
+     * check, a failed download and a refused installer alike, and the state is what
+     * remembers which of those it is.
+     */
+    fun onUpdateRowClick() {
+        when (val state = _update.value) {
+            is UpdateState.Idle, is UpdateState.UpToDate, is UpdateState.Checking -> checkForUpdate()
+
+            is UpdateState.Downloading -> Unit
+
+            is UpdateState.Available -> beginInstall(state.release)
+
+            is UpdateState.NeedsPermission ->
+                if (container.apkInstaller.canInstall()) {
+                    beginInstall(state.release)
+                } else {
+                    openInstallPermission()
+                }
+
+            is UpdateState.ReadyToInstall -> launchInstaller(state.release)
+
+            is UpdateState.Failed -> when (state.kind) {
+                UpdateState.Failed.Kind.CHECK -> checkForUpdate()
+                // Everything else had a release in hand, so OK means "try that again"
+                // rather than "ask GitHub from the top".
+                else -> state.retry?.let { launchInstaller(it) } ?: checkForUpdate()
+            }
+        }
+    }
+
+    /**
+     * Opens the system screen where a per-app "install unknown apps" grant is given.
+     *
+     * Android does not hand that permission out through a dialog the app can draw, and it
+     * is not a runtime permission, so this is the only route. The user comes back to this
+     * row and presses OK again; [UpdateState.NeedsPermission] is holding the release so
+     * that press continues the install instead of repeating the check.
+     */
+    fun openInstallPermission() {
+        runCatching { getApplication<Application>().startActivity(container.apkInstaller.installPermissionIntent()) }
+            .onFailure { Log.w(TAG, "no system screen for install permissions", it) }
+    }
+
+    /** Downloads [release], proves it, and hands it to the installer. */
+    private fun beginInstall(release: UpdateRelease) {
+        if (!release.isInstallable) {
+            // Known only by its tag - the row stays on 有新版本 and carries the manual route.
+            Log.w(TAG, "release ${release.versionName} has no downloadable manifest")
+            _update.value = UpdateState.Available(release)
+            return
+        }
+        if (!container.apkInstaller.canInstall()) {
+            _update.value = UpdateState.NeedsPermission(release)
+            return
+        }
+
+        val alreadyDownloaded = container.apkInstaller.downloadedFile(release)
+        if (alreadyDownloaded != null) {
+            launchInstaller(release)
+            return
+        }
+
+        _update.value = UpdateState.Downloading(release, 0)
+        viewModelScope.launch {
+            val result = container.apkInstaller.download(release) { percent ->
+                _update.value = UpdateState.Downloading(release, percent)
+            }
+            _update.value = when (result) {
+                is ApkInstaller.DownloadResult.Ready -> UpdateState.ReadyToInstall(release)
+                ApkInstaller.DownloadResult.NotTheFile -> {
+                    Log.w(TAG, "update download did not match the manifest hash")
+                    UpdateState.Failed(UpdateState.Failed.Kind.VERIFY, release)
+                }
+                ApkInstaller.DownloadResult.NotSignedByUs -> {
+                    // The bytes matched the manifest, so it is the *manifest* that was not
+                    // ours - the case a mirror or a plain-HTTP address makes possible. Said
+                    // out loud rather than logged, because it is the one failure here that
+                    // means somebody interfered rather than something went wrong.
+                    Log.w(TAG, "update download is not signed by this app's key")
+                    UpdateState.Failed(UpdateState.Failed.Kind.SIGNATURE, release)
+                }
+                is ApkInstaller.DownloadResult.Failed -> {
+                    Log.w(TAG, "update download failed: ${result.reason}")
+                    UpdateState.Failed(
+                        UpdateState.Failed.Kind.DOWNLOAD,
+                        release,
+                        detail = result.reason,
+                    )
+                }
+            }
+            // A verified file still has to find something willing to install it, and a
+            // handoff that finds nothing is its own answer rather than a success.
+            (_update.value as? UpdateState.ReadyToInstall)?.let { launchInstaller(it.release) }
+        }
+    }
+
+    /** Hands an already-verified APK to the system installer. */
+    private fun launchInstaller(release: UpdateRelease) {
+        val file = container.apkInstaller.downloadedFile(release)
+        if (file == null) {
+            // Nothing on disk after all - an earlier failure, or a cache the system
+            // cleared - so this is a download to redo rather than a launch to retry.
+            beginInstall(release)
+            return
+        }
+        val launched = container.apkInstaller.launchInstaller(file)
+        _update.value = if (launched) {
+            // The installer owns the screen from here. If the user cancels it and comes
+            // back, OK on this row opens it again on the same file without re-downloading.
+            UpdateState.ReadyToInstall(release)
+        } else {
+            Log.w(TAG, "no installer accepted ${file.name}")
+            UpdateState.Failed(UpdateState.Failed.Kind.INSTALL, release)
+        }
+    }
+
     /**
      * The last uncaught exception this app recorded, or null if it has not crashed.
      *
@@ -772,6 +966,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Sentinel for "this screen has no recorded position yet". */
         const val NO_POSITION = -1
+
+        /**
+         * How long an automatic update check stands before the settings screen may start
+         * another. Ten minutes is short enough that a build published while the TV was on
+         * is noticed, and long enough that the row is not asking GitHub on every visit.
+         */
+        const val UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000L
 
         const val TAG = "MainViewModel"
     }

@@ -85,19 +85,26 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
 - **Background music under the slideshow** — **背景音乐**, after 播放顺序 in the
   same row, opens a list of tracks above itself: up/down walks them, OK ticks and
   unticks, Back closes the list with the focus back on the control it came from.
-  Nine tracks are catalogued —
-  the list is taller than the room above the settings row, so it is capped at
-  `MUSIC_LIST_MAX_HEIGHT` and scrolls itself to the cursor's row, which nothing else
-  would do: the D-pad never touches those rows, the viewer's root box routes it.
+  Four tracks are catalogued —
+  four rows fit above the settings row, so the `MUSIC_LIST_MAX_HEIGHT` cap is no longer
+  reached; it and the "scrolls itself to the cursor's row" are left over from a nine-track
+  catalogue, where the list was taller than the room above the row and scrolling was something
+  nothing else would do: the D-pad never touches those rows, the viewer's root box routes it.
   The music starts with the
   show, plays the ticked tracks in the order they are listed, loops, and stops with the
   show. It is *held* rather than discarded in the two places something else has the
   room's attention: while the settings row is open, which holds the photo timer for
   exactly the same reason, and while a video is on screen, which plays its own audio.
-  Leaving the viewer ends it. The tracks travel inside the APK (54 MB of it, the price of
-  a catalogue that is mostly full-length Chinese pieces) instead of being fetched from the
-  NAS, because a soundtrack has to start with the show: a track that had to be
-  authenticated and buffered first would put silence in front of every one.
+  Leaving the viewer ends it. The tracks travel inside the APK (14 MB of it) instead of being
+  fetched from the NAS, because a soundtrack has to start with the show: a track that had to be
+  authenticated and buffered first would put silence in front of every one. The catalogue used
+  to hold nine tracks and 54 MB — four fifths of the whole package — and its three largest were
+  slow instrumental pieces (水墨兰亭 12.9 MB, 云水禅心 11.5 MB, 绿野仙踪 箫 10.6 MB) worth 35 MB
+  between them; 1.3.7 **deleted those files**, along with two more, and kept four: 菊次郎的夏天
+  (钢琴版), Thomas Greenberg - Easy Breeze, 唐艺 - 月亮照山川 (Live) and 迎着风 向前冲. The
+  package went from **65.8 MB to 25.6 MB**. Files rather than list entries, because a track
+  nobody can select is still megabytes on every download — which is why `SlideshowMusicTest`
+  now also fails the build when `assets/music` carries a file no catalogue entry names.
 - **Dark or light** — **Settings → 主题** switches the whole app and remembers the
   answer. Dark stays the default, and the one a photo browser in a dim room wants; light
   is there because a bright room turns a dark UI into a mirror, and a TV is not always
@@ -111,6 +118,27 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   Moving to originals starts with the *next* photo: the one on screen is not fetched
   again. This is the default; wanting one photo at full size right now is the viewer's
   **原图** button instead, which leaves the setting alone.
+- **Check for updates** — **Settings → 检测升级** asks Gitee and GitHub at once when the screen
+  appears, and again on every OK. Both are asked because they are reachable from different
+  halves of the world: Gitee from the domestic networks this app's users are on, GitHub from
+  everywhere else. Whichever answers wins, the newer of the two answers wins over the faster
+  one, and a source that never answers costs a three-second grace window rather than its whole
+  timeout. Each source offers its release manifest first (version name, version code, APK URL,
+  SHA-256) and falls back to the release tag, which is enough to name a version and nothing
+  more. When that version is newer the row says **有新版本 x.y.z** and OK starts a download that
+  is **verified against the manifest — and its signing certificate checked against this app's
+  own key — before the system installer is ever handed the file**; a mismatch is deleted and
+  reported, and an unverified APK is never passed on. Android 8 and up also wants the per-app
+  "install unknown apps" grant, which the app asks for **before** downloading — spending 66 MB
+  to discover the file cannot be installed is the worst failure a television can have. It
+  deliberately **does not use either host's API**: GitHub's anonymous quota is 60 requests an
+  hour per address and this project's own network had already spent it (403 in testing), and a
+  failure the user cannot act on is worse than no check at all. Whenever a route is blocked,
+  the row carries the manual one (the release page URL), because failing to install on this
+  device should not mean there is no way forward. It also **writes out why it failed** — the
+  exception name and message, or the HTTP status, with the time it took — because a television
+  has no console and that row is the only place the reason can be read; "check failed" on its
+  own is something nobody, including whoever wrote it, can act on.
 - **The settings column scrolls** — there are now more rows than fit a 1080p screen, and
   the last one, 清除图片缓存, used to be cut off at the bottom edge: a rounded box with no
   text in it, which reads as a button that does nothing. It did clear the cache, but its
@@ -265,8 +293,10 @@ ready, and a file the server could not produce is not "on its way".
 The bottom band holds the photo's details on the left and a **幻灯片** button in the
 corner. That button opens a row of controls above itself: play/pause, the interval
 (3 s / 5 s / 8 s / 15 s / 30 s), the order (**顺序** / **随机**) and the background
-music. Left/right picks a control and up/down changes its value. Both are remembered, and
-the interval is the same one **Settings** edits. The photo deliberately does not advance
+music. Left/right picks a control and up/down changes its value. Both are remembered.
+**The interval has this one entry point**: Settings used to carry the same row (1.3.7 removed
+it — one setting with two doors, and it cost a row of height), and changing it here or there
+stored the same preference, so nothing was lost with the row. The photo deliberately does not advance
 while the row is open. Back closes the row and leaves the button up; a second Back leaves
 the viewer.
 
@@ -326,17 +356,27 @@ press at a time.
 
 A signed APK is on the GitHub release page, so building it is optional:
 
-**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.1.apk`,
-65.7 MiB, SHA-256 `CFBF6A183541E712E9DEF78716FA3CE2A0CC2E754F172D5ED2BB0DF297C2CF92` (the
-release notes quote it too). The same file also lands in the share described below; the two
-are one build.
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.7.apk`,
+25.6 MiB. The same release is mirrored on Gitee, which is the reachable one on a domestic
+network: **<https://gitee.com/kungfucode/fn-tv-photo/releases/latest>**. The file also lands
+in the share described below; these are one build.
+
+Each release carries a **`version.json`** beside its APK — that is what 检测升级 in Settings
+reads: version name, version code, APK URL and SHA-256, and it is the only thing that carries
+a hash, so a release without one can be reported but never downloaded. A release build writes
+it next to the APK (`tools/release-manifest.ps1`, run by `tools/build.ps1`; `-Site`/`-Repo`
+produce the Gitee copy), and `tools/publish-gitee.ps1` creates the release there, uploads the
+APK and commits the manifest to the repository, where the app reads it from
+`gitee.com/<repo>/raw/<branch>/version.json` — Gitee serves no `latest/download` alias the way
+GitHub does, so a file at a fixed path is the one address shape that needs no API call and no
+tag lookup at check time.
 
 To build it yourself:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3.1-20261008-141816.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.3.7.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3.7-<stamp>.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -350,12 +390,12 @@ authenticated does not fail the build — it warns, and the APK is still in
 `app/build/outputs/apk/`.
 
 The release APK is named after the app **and its version** rather than after the Gradle
-variant — `FN-tvphoto-1.3.1.apk`. The version string is written once, as `appVersionName` in
+variant — `FN-tvphoto-1.3.7.apk`. The version string is written once, as `appVersionName` in
 `app/build.gradle.kts`; the manifest, the settings screen and the file name all take it from
 there, so bumping the version renames the artifact with it. `app-release.apk` was the
 alternative, and it says nothing about which app or which version the file is once it is
 sitting in a TV's download folder. The name on the share then carries that APK's own **build
-time** — `FN-tvphoto-1.3.1-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
+time** — `FN-tvphoto-1.3.7-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
 to and nothing is silently overwritten. The stamp comes from the file's timestamp rather
 than the clock at upload, so re-publishing the same APK reuses the same name instead of
 piling up duplicates. `tools/publish-apk.ps1` and `tools/tv.ps1` take the newest file
@@ -374,7 +414,7 @@ script uses a character outside ASCII.
 Then install it on the TV:
 
 ```bash
-adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.1.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.7.apk
 ```
 
 The release build is signed with `app/tvphoto.jks`. That keystore is **not** in
@@ -409,6 +449,9 @@ app/src/main/java/com/tvphoto/
     AppContainer.kt   hand-rolled DI; one token source shared by API + media
     BaseUrl.kt        address normalisation (incl. full-width IME input)
     CrashLog.kt       keeps the last uncaught exception for the Settings screen
+    UpdateChecker.kt  what the newest release is; the two sources asked at once
+    ApkInstaller.kt   downloads the APK, checks its hash and its signature, hands it
+                       to the system installer
     OkHttpDataSource.kt  the video player reads through the app's own OkHttp
                           client (token, access-code cookie, pinned trust)
     PreviewOriginal.kt   original or large thumbnail for previews, and which one
@@ -420,16 +463,20 @@ app/src/main/java/com/tvphoto/
                           selection of them is stored and ordered
     SlideshowMusicPlayer.kt  ExoPlayer looping the ticked tracks under a show
   domain/Models.kt    UI-facing models
+  domain/AppVersion.kt   how versions compare: the tag's leading v, missing segments, suffixes
   domain/PagingQueue.kt  the paging pointer: where the queue stands after one press
   domain/SlideshowOrder.kt  which picture a show moves to next: photos, skip the clips
   ui/
     login/ home/ gallery/ viewer/   screens
     components/Spinner.kt   the drawn arc, shared by start-up and by the viewer
     MainViewModel.kt  navigation stack + per-section state
-app/src/main/assets/music/   the nine tracks a slideshow can play
+    UpdateState.kt    the state machine behind the 检测升级 row
+app/src/main/assets/music/   the four tracks a slideshow can play
 tools/
-  build.ps1           Gradle wrapper with the local toolchain; publishes the APK
+  build.ps1           Gradle wrapper with the local toolchain; publishes the APK; writes version.json
   publish-apk.ps1     copies a built APK to \\fnos-ms01\Temp\软件 and verifies it
+  release-manifest.ps1  writes version.json, for either site (-Site / -Repo)
+  publish-gitee.ps1   creates the Gitee release, uploads the APK, commits the manifest
   tv.ps1              install / launch / screenshot / key injection
   mock-nas/           a mock fnOS server that enforces the real auth rules, plus
                       controls for timing- and change-dependent behaviour
@@ -545,7 +592,7 @@ verification was built deliberately:
    stall it either — it gets one interval and the show is on the next picture.
    `SlideshowOrderTest` pins the same rules off the device, over every seed for the
    shuffled draw.
-9. **The paging pointer, the prefetch window and the nine-track catalogue** — the three
+9. **The paging pointer, the prefetch window and the track catalogue** — the three
    changes that only exist on screen. `__control/slow-media?ms=12000&sizes=o` with the
    image cache emptied puts the pointer walk somewhere a screenshot can catch it:
    one press right is one right arrow, the next press left takes that step back
@@ -557,15 +604,20 @@ verification was built deliberately:
    **one** original — the photo on screen — where the same build with `hold = { false }`
    sent **five**, the visible photo twice over plus three prefetches (`/__control/media`).
    Fourteen seconds later, with the photo landed, the window had resumed on its own (five
-   originals). The music list was walked with nine tracks in it: it opens on the
+   originals). The music list was walked with nine tracks in it (that run predates 1.3.7, which
+   cut the catalogue to four): it opens on the
    ticked row, scrolls itself to the last one, ticks it and takes
    the ticks off the two that shipped before. That last state — exactly one track
    ticked, one of the new seven — was then played, and read off the device the way item 7
    reads the audio: `media.audio_flinger` reports `1 Tracks of which 1 are active` for
    `com.tvphoto.debug` with `Standby: no`, and the log carries `ExoPlayerImpl`'s init and
    an audio `MediaCodec` being built for it, with nothing about a missing asset.
-   `SlideshowMusicTest` is what keeps the catalogue honest off the device: it fails the
-   build if any of the nine names a file the APK does not carry.
+   `SlideshowMusicTest` is what keeps the catalogue honest off the device: it fails the build
+   if any name in the catalogue is a file the APK does not carry, and — added in 1.3.7, when the
+   catalogue went from nine tracks to four — it fails just as loudly when `assets/music` carries
+   a file no entry names. Dropping entries is a one-line edit; dropping the audio is the part
+   that is easy to forget, and 35 MB of unselectable music would then ride along in every
+   download.
 
 10. **The icon** — no test proves a picture looks right, so the new one was rendered and
    looked at before it became a vector: drawn at 512 / 192 / 96 / 48 px, then masked with a
@@ -618,6 +670,48 @@ verification was built deliberately:
     left/right are that row's), while with only 幻灯片 in the corner — the clip parked on
     `3 / 15` — → still turned the page, landing on `4 / 15`.
 
+13. **Check for updates, walked the way a user would** — the routes are things only a screen can
+    prove. **Against the real hosts**: entering the settings screen checks by itself, and a
+    television whose network blackholes github.com still gets an answer, because Gitee is asked
+    at the same time and answers in about 0.25 s where GitHub takes 0.7–1.2 s. Pointing a source
+    at a repository that does not exist is what puts **检查失败** and 按 OK 重试 on screen; the
+    row also carries the elapsed time and the exception, which is what turned "it fails" into
+    "it blackholes the connection, and the twenty-one seconds were a sequenced pair of
+    timeouts" — a real television's report, and the reason the two sources are now asked at
+    once with a three-second grace window rather than one after the other.
+    **Download, verification and install** need a manifest with a SHA-256, so that part was fed
+    by a local HTTP server serving a manifest and an APK in exactly that shape, with the app's
+    URL constant pointed at it for the run and reverted afterwards. That run went: **有新版本**
+    with the manual fallback text → OK hits **需要允许安装** first, because the system grant was
+    off (so it did not spend 66 MB to find out) → OK opens the system "install unknown apps"
+    panel, the switch goes on → OK again → **正在下载 50%** → the system installer opens by
+    itself asking to update the app, with the verified file where it should be and its byte count
+    equal to the manifest's `sizeBytes` → cancelling and pressing OK again **reopens the
+    installer with the file's timestamp unchanged**, so nothing was downloaded twice → and with
+    the manifest's SHA-256 replaced by a wrong value, **安装包校验失败** with the mismatching file
+    **not on the disk**. The Gitee round was then verified the same way end to end: an anonymous
+    download of the published asset, 25.6 MiB in 12.5 s, hashing to the manifest's value.
+14. **The signature check, and the bug a real television found in it** — the check was written
+    to refuse an APK not signed by this app's own key, which is what lets the manifest come from
+    a mirror. It shipped in 1.3.5 and refused a genuine update on the author's own TV with
+    **安装包签名不对**. The cause was a platform asymmetry: `getPackageArchiveInfo` collects an
+    APK's certificates **only when the older `GET_SIGNATURES` flag is passed**, so asking for
+    just `GET_SIGNING_CERTIFICATES` returns a `PackageInfo` whose signing details were never
+    filled in — while the *installed* package answers from the package manager's database either
+    way. Empty was then read as "signed by somebody else". Three things changed: both flags are
+    passed, the older field is read when the newer one comes back empty, and **"not readable" is
+    no longer "different"** — only a definite mismatch refuses, because blocking a genuine update
+    is worse than the risk being guarded against, and the installer enforces the rule regardless.
+    Verified on the emulator by serving a manifest that describes a debug-signed APK to a
+    debug-signed build: the verdict is *same*, the installer opens, and the log carries no
+    "cannot read the certificate" line — which is how the two outcomes are told apart, since both
+    would otherwise look identical on screen. The off-device half is pinned by `AppVersionTest`
+    (13 — the tag's leading `v`, missing segments, pre-release suffixes, unreadable strings, and
+    "a release ahead on either the name or the version code is an update") and
+    `UpdateCheckerTest` (11 — a manifest missing fields, a hash in lower case or with spaces, an
+    error page read as a manifest, no release yielding a version scraped out of a path, and two
+    sources that answer differently offering the newer release rather than the faster one).
+
 Two bugs were found only by testing the way a user actually would:
 
 - **Credentials were never written to storage.** Auto-login silently never happened.
@@ -667,6 +761,15 @@ And one found by pointing the app at a real NAS for the first time:
   slideshow normally holds exactly one page — the viewer never pages in more — so in
   practice the window is the whole list; the gap needs a list longer than one page, which
   means a grid that was scrolled to the end before the viewer was opened.
+- **A release has to be published to both places.** The app asks Gitee and GitHub and takes the
+  newer answer, so a release published to only one of them is offered by whichever was updated
+  and *not* by the other — for a while the two carried different versions, which is survivable
+  and was useful as a test, but keeping them in step is the rule.
+- **Installing from inside the app needs one system grant.** Android 8 and up must first be told
+  this app may install apps, and every install still has to be confirmed by the user on the
+  system installer's own screen — deliberately; the app never installs anything silently. Some
+  TV firmware (or a device-managed box) has no usable installer at all, and then only the manual
+  route is left.
 - **Only tested against the mock server**, not a physical NAS. The protocol follows
   two shipping implementations, but a real device may still differ in details.
 - The `POST /p/api/v1/photo/collect` favourites endpoint and the AI features

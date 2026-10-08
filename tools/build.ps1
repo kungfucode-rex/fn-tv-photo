@@ -14,6 +14,11 @@
   -PublishVariants @('release','debug') to send both, or -PublishDestination to point
   somewhere else.
 
+  A release APK also leaves version.json beside it - the manifest the app's own
+  "check for updates" row downloads to learn that a newer build exists and to verify
+  the APK it fetches. That file is not uploaded by this script; it is attached to the
+  GitHub release, which is published by hand. See tools/release-manifest.ps1.
+
   Like tools/publish-apk.ps1, this file is deliberately pure ASCII: Windows PowerShell
   decodes a .ps1 as ANSI unless it carries a UTF-8 BOM.
 #>
@@ -69,6 +74,20 @@ if ($result -eq 0 -and -not $NoPublish) {
     if ($LASTEXITCODE -ne 0) {
       Write-Warning "build: the $variant APK was built but not published"
     }
+  }
+}
+
+# A release APK also leaves version.json beside it: the manifest the app's own 检测升级
+# row reads to learn a newer build exists and to verify the one it downloads. This is not
+# an upload - nothing leaves the machine - it only describes the APK that was just built,
+# so it runs whether or not publishing was asked for. It is what gets attached to the
+# GitHub release by hand (see tools/release-manifest.ps1), and a failure here must not
+# fail a build that has already produced its APK.
+if ($result -eq 0 -and ($variants -contains 'release')) {
+  try {
+    & (Join-Path $PSScriptRoot 'release-manifest.ps1')
+  } catch {
+    Write-Warning "build: version.json was not written: $($_.Exception.Message)"
   }
 }
 

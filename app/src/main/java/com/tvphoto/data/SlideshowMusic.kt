@@ -17,6 +17,12 @@ data class MusicTrack(
  * show. It also means the list is a fixed, known catalogue — the setting is stored as a
  * selection *from* this list, so a track that is renamed or dropped cannot leave a
  * dangling preference behind.
+ *
+ * Four tracks, and they are the ones that keep a room's attention on a wall of pictures:
+ * the catalogue used to carry nine, of which the three largest were slow instrumental
+ * pieces — 35 MB of the 66 MB package, for music that a slideshow's own pace works
+ * against. The files are gone from `assets/music` rather than merely unlisted, because a
+ * track nobody can select is still a track every install pays for.
  */
 val SLIDESHOW_MUSIC: List<MusicTrack> = listOf(
     MusicTrack(
@@ -30,26 +36,6 @@ val SLIDESHOW_MUSIC: List<MusicTrack> = listOf(
     MusicTrack(
         asset = "music/tangyi-moon-over-mountains-live.mp3",
         title = "唐艺 - 月亮照山川 (Live)",
-    ),
-    MusicTrack(
-        asset = "music/chenxiaozhu-bie-zhiji.mp3",
-        title = "陈晓竹 - 别知己",
-    ),
-    MusicTrack(
-        asset = "music/lizhihui-shuimo-lanting.mp3",
-        title = "李志辉 - 水墨兰亭",
-    ),
-    MusicTrack(
-        asset = "music/zhuyinglingfeng-lvye-xianzong-xiao.mp3",
-        title = "竹影聆风 - 绿野仙踪 箫",
-    ),
-    MusicTrack(
-        asset = "music/wangxianhong-yunshui-chanxin-guqin.mp3",
-        title = "王先宏 - 云水禅心(古琴纯音乐)",
-    ),
-    MusicTrack(
-        asset = "music/wangjun-xie-gei-haiyang.mp3",
-        title = "王珺 - 写给海洋",
     ),
     MusicTrack(
         asset = "music/yingzhefeng-xiangqian-chong.mp3",

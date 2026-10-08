@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.3.1"
+val appVersionName = "1.3.7"
 
 android {
     namespace = "com.tvphoto"
@@ -29,7 +29,25 @@ android {
         // 3 carried the rename from TV Photo to FN Photo; 4 was the first build of the preview
         // tier work and 5 the one it ships as, because a TV's installer refuses to lay a build
         // over another with the same version code — 1.3 could not be installed over 1.3.
-        versionCode = 5
+        // 6 is 1.3.2, whose one new thing is the update check; it also has to move for that
+        // check to be testable, since the installer compares this number rather than the name.
+        // 7 is 1.3.3, identical to 1.3.2 but for the number: it exists so an install of 1.3.2
+        // has something to find.
+        // 8 is 1.3.4, which puts the reason a check failed on the row instead of only in the
+        // log - a television has no console, and "检查失败" on its own is not a diagnosis -
+        // and asks Gitee as well as GitHub, so a network that cannot reach one of them is
+        // no longer a network that cannot check.
+        // 9 is 1.3.5, 1.3.4 with the window between the two sources widened to three
+        // seconds; it is also the release a 1.3.4 install has to find, so that the Gitee
+        // path is exercised end to end on a television rather than only in a terminal.
+        // It was republished unchanged in number after the signature check it shipped with
+        // turned out to refuse genuine updates - see the note in ApkInstaller.signingFlags.
+        // 10 is 1.3.6, identical to 1.3.5 but for the number: the release a 1.3.5 install
+        // has to find, which is how the repaired check is proved on a television.
+        // 11 is 1.3.7, which drops the Settings row for the slideshow interval - the viewer
+        // has always had the same control - and cuts the bundled music from nine tracks to
+        // four, taking the package from 66 MB to 26 MB.
+        versionCode = 11
         versionName = appVersionName
     }
 

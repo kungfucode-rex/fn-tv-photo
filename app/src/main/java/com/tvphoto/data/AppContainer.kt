@@ -95,6 +95,18 @@ class AppContainer(context: Context) {
     fun forceSignMode(mode: SignMode) = signedHttp.forceSignMode(mode)
 
     /**
+     * Asks the release page what the newest published build is.
+     *
+     * The only part of this app that talks to a server which is not the NAS, so it is
+     * also the only part with its own trust rules - see [UpdateChecker] for why it may
+     * not share the clients above.
+     */
+    val updates: UpdateChecker = UpdateChecker()
+
+    /** Downloads a release APK and hands it to the system installer. */
+    val apkInstaller: ApkInstaller = ApkInstaller(appContext)
+
+    /**
      * Points Coil at the authenticated client. Thumbnails need the `AccessToken`
      * header but no signature, so plain image URLs work.
      *

@@ -30,10 +30,10 @@ import com.tvphoto.BuildConfig
 import com.tvphoto.R
 import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SessionState
-import com.tvphoto.data.SettingsStore
 import com.tvphoto.data.ThemeMode
 import com.tvphoto.data.fn.SignMode
 import com.tvphoto.ui.MainViewModel
+import com.tvphoto.ui.UpdateState
 import com.tvphoto.ui.components.FocusableSurface
 import com.tvphoto.ui.components.SectionHeader
 import com.tvphoto.ui.components.formatFileSize
@@ -41,7 +41,6 @@ import com.tvphoto.ui.components.formatFileSize
 @Composable
 fun SettingsSection(viewModel: MainViewModel) {
     val signMode by viewModel.signMode.collectAsStateWithLifecycle()
-    val slideshowSeconds by viewModel.slideshowSeconds.collectAsStateWithLifecycle()
     val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
@@ -103,6 +102,27 @@ fun SettingsSection(viewModel: MainViewModel) {
             value = "FN Photo ${BuildConfig.VERSION_NAME}",
         )
 
+        // Asks GitHub by itself the moment this screen appears, throttled in the view
+        // model. The row is the whole interface: no dialog, no second button, and nothing
+        // that can be typed on a television.
+        LaunchedEffect(Unit) { viewModel.autoCheckForUpdate() }
+        val update by viewModel.update.collectAsStateWithLifecycle()
+        val updateRow = updateRowText(update, viewModel.updateReleasePageUrl)
+        ActionRow(
+            label = stringResource(R.string.settings_update),
+            value = updateRow.value,
+            hint = updateRow.hint,
+            valueColor = if (update is UpdateState.Available ||
+                update is UpdateState.NeedsPermission ||
+                update is UpdateState.ReadyToInstall
+            ) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            onClick = viewModel::onUpdateRowClick,
+        )
+
         // Read once per visit: it cannot change while the process lives, and the one
         // time it matters — a launch that died on a TV with no console — it is the only
         // report the user can actually read out.
@@ -142,17 +162,6 @@ fun SettingsSection(viewModel: MainViewModel) {
         )
 
         ActionRow(
-            label = stringResource(R.string.settings_slideshow_interval),
-            value = stringResource(R.string.settings_slideshow_interval_value, slideshowSeconds),
-            onClick = {
-                val options = SettingsStore.INTERVAL_OPTIONS
-                val next = options[(options.indexOf(slideshowSeconds).takeIf { it >= 0 } ?: 0)
-                    .let { (it + 1) % options.size }]
-                viewModel.setSlideshowSeconds(next)
-            },
-        )
-
-        ActionRow(
             label = stringResource(R.string.settings_preview_original),
             value = when (previewOriginal) {
                 PreviewOriginal.ALWAYS -> stringResource(R.string.settings_preview_original_yes)
@@ -176,6 +185,79 @@ fun SettingsSection(viewModel: MainViewModel) {
             },
         )
     }
+}
+
+/**
+ * The value and the hint the 检测升级 row shows for [state].
+ *
+ * [releasePageUrl] is carried into the hint whenever the answer is "there is something to
+ * install and this row cannot finish the job" - an unverifiable release, a permission the
+ * user has not granted, an installer that would not open. That is the workaround the row
+ * owes the user: the same APK, fetched by hand on a device that can do it.
+ */
+private data class UpdateRowText(val value: String, val hint: String?)
+
+@Composable
+private fun updateRowText(state: UpdateState, releasePageUrl: String): UpdateRowText = when (state) {
+    is UpdateState.Idle -> UpdateRowText(stringResource(R.string.settings_update_idle), null)
+
+    is UpdateState.Checking -> UpdateRowText(stringResource(R.string.settings_update_checking), null)
+
+    is UpdateState.UpToDate ->
+        UpdateRowText(stringResource(R.string.settings_update_up_to_date), null)
+
+    is UpdateState.Available -> UpdateRowText(
+        value = stringResource(R.string.settings_update_available, state.release.versionName),
+        hint = stringResource(
+            if (state.release.isInstallable) {
+                R.string.settings_update_hint_available
+            } else {
+                R.string.settings_update_hint_tag_only
+            },
+            releasePageUrl,
+        ),
+    )
+
+    is UpdateState.Downloading -> UpdateRowText(
+        value = stringResource(R.string.settings_update_downloading, state.percent),
+        hint = stringResource(R.string.settings_update_hint_downloading),
+    )
+
+    is UpdateState.NeedsPermission -> UpdateRowText(
+        value = stringResource(R.string.settings_update_needs_permission),
+        hint = stringResource(R.string.settings_update_hint_permission),
+    )
+
+    is UpdateState.ReadyToInstall -> UpdateRowText(
+        value = stringResource(R.string.settings_update_ready),
+        hint = stringResource(R.string.settings_update_hint_ready),
+    )
+
+    is UpdateState.Failed -> UpdateRowText(
+        value = stringResource(
+            when (state.kind) {
+                UpdateState.Failed.Kind.CHECK -> R.string.settings_update_failed_check
+                UpdateState.Failed.Kind.DOWNLOAD -> R.string.settings_update_failed_download
+                UpdateState.Failed.Kind.VERIFY -> R.string.settings_update_failed_verify
+                UpdateState.Failed.Kind.SIGNATURE -> R.string.settings_update_failed_signature
+                UpdateState.Failed.Kind.INSTALL -> R.string.settings_update_failed_install
+            },
+        ),
+        // A refused installer is not something pressing OK again is likely to fix, so that
+        // one points at the manual route instead of at itself. Everything else repeats the
+        // reason the failure gave, when it gave one: on a television this row is the only
+        // place that reason can be read, and it is the difference between "检查失败" and
+        // "无法解析主机名" - one is a mystery, the other is a diagnosis.
+        hint = when {
+            state.kind == UpdateState.Failed.Kind.INSTALL ->
+                stringResource(R.string.settings_update_hint_manual, releasePageUrl)
+
+            !state.detail.isNullOrBlank() ->
+                stringResource(R.string.settings_update_hint_reason, state.detail)
+
+            else -> stringResource(R.string.settings_update_hint_retry)
+        },
+    )
 }
 
 @Composable

@@ -99,8 +99,6 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_sign_mode">Signature mode</string>
     <string name="settings_sign_mode_hint">Auto-negotiated by default. Switch manually if listing keeps failing with a signature error.</string>
-    <string name="settings_slideshow_interval">Slideshow interval</string>
-    <string name="settings_slideshow_interval_value">%1$d s</string>
     <string name="settings_preview_original">Preview originals</string>
     <string name="settings_preview_original_yes">Yes</string>
     <string name="settings_preview_original_no">No</string>
@@ -112,4 +110,28 @@
     <string name="settings_cache_measuring">Reading…</string>
     <string name="settings_last_crash">Last crash</string>
     <string name="settings_crash_none">None</string>
+
+    <!-- Update check. Every value here is a state of one row, because a television has
+         no second way in: no dialog to dismiss and nothing that can be typed. -->
+    <string name="settings_update">Check for updates</string>
+    <string name="settings_update_idle">Not checked</string>
+    <string name="settings_update_checking">Checking…</string>
+    <string name="settings_update_up_to_date">Up to date</string>
+    <string name="settings_update_available">Version %1$s available</string>
+    <string name="settings_update_downloading">Downloading %1$d%%</string>
+    <string name="settings_update_needs_permission">Permission needed</string>
+    <string name="settings_update_ready">Downloaded</string>
+    <string name="settings_update_failed_check">Check failed</string>
+    <string name="settings_update_failed_download">Download failed</string>
+    <string name="settings_update_failed_verify">Update failed verification</string>
+    <string name="settings_update_failed_signature">Update is signed by another key</string>
+    <string name="settings_update_failed_install">No installer available</string>
+    <string name="settings_update_hint_available">Press OK to download and install; or open %1$s on another device</string>
+    <string name="settings_update_hint_tag_only">This release carries nothing to verify. Open %1$s on another device to install it by hand</string>
+    <string name="settings_update_hint_permission">Allow this app to install apps in system settings; press OK to open them</string>
+    <string name="settings_update_hint_ready">Press OK to open the system installer</string>
+    <string name="settings_update_hint_downloading">The system installer opens by itself once the download finishes</string>
+    <string name="settings_update_hint_retry">Press OK to try again</string>
+    <string name="settings_update_hint_reason">%1$s · press OK to try again</string>
+    <string name="settings_update_hint_manual">Open %1$s on another device to install it by hand</string>
 </resources>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the FileProvider behind 检测升级 may hand out, and nothing else.
+
+  A downloaded APK lands in the app's own external directory under `updates/`; the
+  internal path is the fallback for a device with no external volume. Both are scoped to
+  that one subdirectory rather than to the whole directory, so the provider cannot become
+  a way to read anything else this app has written.
+-->
+<paths>
+    <external-files-path
+        name="updates"
+        path="updates/" />
+    <files-path
+        name="updates_internal"
+        path="updates/" />
+</paths>

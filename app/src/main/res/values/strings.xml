@@ -99,8 +99,6 @@
     <string name="settings_theme_light">浅色</string>
     <string name="settings_sign_mode">签名模式</string>
     <string name="settings_sign_mode_hint">默认自动协商。若列表一直报签名错误，可手动切换。</string>
-    <string name="settings_slideshow_interval">幻灯片间隔</string>
-    <string name="settings_slideshow_interval_value">%1$d 秒</string>
     <string name="settings_preview_original">预览原图</string>
     <string name="settings_preview_original_yes">是</string>
     <string name="settings_preview_original_no">否</string>
@@ -112,4 +110,28 @@
     <string name="settings_cache_measuring">读取中…</string>
     <string name="settings_last_crash">上次崩溃</string>
     <string name="settings_crash_none">无</string>
+
+    <!-- Update check. Every value here is a state of one row, because a television has
+         no second way in: no dialog to dismiss and nothing that can be typed. -->
+    <string name="settings_update">检测升级</string>
+    <string name="settings_update_idle">未检查</string>
+    <string name="settings_update_checking">检查中…</string>
+    <string name="settings_update_up_to_date">已是最新版本</string>
+    <string name="settings_update_available">有新版本 %1$s</string>
+    <string name="settings_update_downloading">正在下载 %1$d%%</string>
+    <string name="settings_update_needs_permission">需要允许安装</string>
+    <string name="settings_update_ready">已下载</string>
+    <string name="settings_update_failed_check">检查失败</string>
+    <string name="settings_update_failed_download">下载失败</string>
+    <string name="settings_update_failed_verify">安装包校验失败</string>
+    <string name="settings_update_failed_signature">安装包签名不对</string>
+    <string name="settings_update_failed_install">无法调起安装器</string>
+    <string name="settings_update_hint_available">按 OK 下载并安装；也可以在别的设备打开 %1$s 手动安装</string>
+    <string name="settings_update_hint_tag_only">这个版本没有带校验值的安装包。在别的设备打开 %1$s 手动安装</string>
+    <string name="settings_update_hint_permission">先在系统设置里允许本应用安装应用；按 OK 打开系统设置</string>
+    <string name="settings_update_hint_ready">按 OK 打开系统安装界面</string>
+    <string name="settings_update_hint_downloading">下载完成后会自己打开系统安装界面</string>
+    <string name="settings_update_hint_retry">按 OK 重试</string>
+    <string name="settings_update_hint_reason">%1$s · 按 OK 重试</string>
+    <string name="settings_update_hint_manual">在别的设备打开 %1$s 手动安装</string>
 </resources>

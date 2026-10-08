@@ -5,6 +5,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
+      Settings -> 检测升级 downloads the next APK and opens the system installer on it.
+      The permission is what lets Android 8 and up offer that at all; the app cannot
+      install anything by itself, and the user still confirms every install on the
+      installer's own screen. Nothing else here uses it, and no install is ever silent.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
       TV form factor: no touchscreen. leanback is *not* marked required: a TV that
       does not declare android.software.leanback (several Xiaomi/MIUI TV builds) must
       still be allowed to install and list the app. Nothing here is optional at
@@ -52,6 +60,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Hands a downloaded APK to the system installer.
+
+          The installer is a different process and cannot read this app's files, so the
+          file is passed as a content:// URI carrying a one-shot read grant. The authority
+          is built from applicationId, which keeps the debug build's copy distinct from
+          the release one - the two are installed side by side and would otherwise claim
+          the same provider.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

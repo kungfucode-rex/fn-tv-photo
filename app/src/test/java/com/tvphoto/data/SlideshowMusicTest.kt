@@ -72,6 +72,25 @@ class SlideshowMusicTest {
         assertEquals(emptyList<String>(), decodeMusicSelection("music/gone.mp3"))
     }
 
+    @Test
+    fun `no audio file ships without an entry in the catalogue`() {
+        // The other direction of the same rule, and the one that decides the package's
+        // size: a file left behind after its entry was dropped is megabytes of every
+        // download that nobody can ever select. The catalogue shrank from nine tracks to
+        // four by deleting files, and this is what stops the next removal from being a
+        // one-line edit that leaves the audio in the APK.
+        val onDisk = musicAssetsDirectory().resolve("music").listFiles().orEmpty()
+            .filter { it.isFile }
+            .map { "music/${it.name}" }
+            .toSet()
+
+        assertEquals(
+            "audio in assets/music that no catalogue entry names",
+            emptySet<String>(),
+            onDisk - SLIDESHOW_MUSIC.map { it.asset }.toSet(),
+        )
+    }
+
     /**
      * The directory the catalogue's paths are relative to.
      *

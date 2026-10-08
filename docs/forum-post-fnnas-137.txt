@@ -18,25 +18,27 @@
 现象：`kungfucode` 里的两个字母被论坛自动屏蔽，`https://github.com/kungfucode` 变成
 `https://github.com/kung**code`，链接就点不开了。
 
-已经实测过的三条路：
+已经实测过的三条路（2026-10-08 实测，含大小写那条**失败**的结果）：
 
-1. **改大小写（当前正文用的就是这个）**：写成 `kungFuCode` / `kungFuCode-rex`。
-   实测（2026-10-08）：
-     · https://github.com/kungFuCode-rex/fn-tv-photo        → 200
-     · https://gitee.com/kungFuCode/fn-tv-photo             → 200
-     · https://gitee.com/kungFuCode/fn-tv-photo/releases/latest → 302 到 v1.3.7 的 tag
-   两个站点都不区分大小写，点开是同一个页面。**前提是论坛的过滤区分大小写** ——
-   发帖预览里看一眼：没被打码就成了。
-2. **把 c 写成 %63**：`https://github.com/kungfu%63ode-rex/fn-tv-photo` 实测 200
-   （HTTP 层会解码）。同样能避开过滤且不依赖大小写，但 Gitee 的 raw 文件路径会 404，
-   所以只适合放「仓库 / 发布页」这种页面链接，别用在直链文件上。
+1. ~~改大小写~~ —— **不行**。写成 `kungFuCode` 一样被打码，说明论坛的过滤不区分大小写。
+   （两个站点本身是认大小写的：`github.com/kungFuCode-rex/…` 与 `gitee.com/kungFuCode/…` 都返回
+   200，`releases/latest` 也照常 302 —— 所以这条本来能用，只是被过滤挡住了。）
+2. **把 c 写成 %63（当前正文用的就是这个）**：`https://github.com/kungfu%63ode-rex/fn-tv-photo`。
+   HTTP 层会解码 `%63`，实测：
+     · github.com/kungfu%63ode-rex/fn-tv-photo/releases/latest  → 302 到 /releases/tag/v1.3.7
+     · gitee.com/kungfu%63ode/fn-tv-photo/releases/latest       → 302 到 /releases/tag/v1.3.7
+     · github.com/kungfu%63ode-rex/fn-tv-photo/releases/tag/v1.3.7 → 200
+   不依赖大小写，原始文本里也没有敏感串，所以过滤抓不到。
+   注意：**Gitee 的 raw 文件路径不能这么写**（`…/raw/master/version.json` 会 404），
+   所以只用在页面链接上，别用在直链文件上。
 3. **换地址（根本解法）**：把仓库转到一个名字干净的组织，例如 `fn-photo`，地址变成
    `https://github.com/fn-photo/fn-tv-photo` 与 `https://gitee.com/fn-photo/fn-tv-photo`，
    两个都不含敏感串，以后每帖都能直接点。
-   代价：应用里两处硬编码的清单地址（`UpdateChecker` 的 SOURCES）、
+   代价与风险：应用里两处硬编码的清单地址（`UpdateChecker` 的 SOURCES）、
    `tools/release-manifest.ps1` 与 `tools/publish-gitee.ps1` 的默认值、README 里的链接都要改，
-   然后发一版新包；GitHub 转移后旧地址会自动 301，老帖子里的链接不会断。
-   要不要做，等你定。
+   然后发一版（1.3.8）。GitHub 转移后旧地址会自动 301，老帖和现装用户的 GitHub 通道不会断；
+   **Gitee 转移后旧路径是否跳转未验证**，而 Gitee 正是国内用户那条路 ——
+   所以真要做，应用里应该同时留着新旧两个地址（旧的做兜底），再发 1.3.8。
 
 另外正文里已经写了「附件里的 APK 就是最新版」——**把 25.6 MiB 的 APK 传成论坛附件**是最省事的做法：
 读者不用点任何外链，网址打不打码都不影响下载。
@@ -86,8 +88,9 @@
       匿名下载实测 12.5 秒、哈希与清单一致（Gitee 的 raw 清单有 60 秒 CDN 缓存，属正常）。
   [x] 两个站点的升级清单都指向各自站点的附件，应用取更新的那个 —— 所以两边必须一起发；
       这次已经一致（都是 1.3.7 / versionCode 11 / 同一个 SHA-256）。
-  [ ] **先发预览看一眼网址有没有被打码**。没打码就保持 `kungFuCode` 的写法；
-      打了码就换成 `kungfu%63ode`（页面链接可用），或者考虑转到干净名字的组织。
+  [ ] **先发预览看一眼网址**。现在正文用的是 `kungfu%63ode`（`%63` = 字母 c）：
+      没被打码、点开能到发布页就成了；如果连它都被吃掉，就只剩「APK 传成论坛附件」这条路
+      （正文已经写明附件就是最新版，所以不影响下载）。
   [ ] **25.6 MiB 的 APK 传成论坛附件**：上传前看一眼「附件」按钮旁的上限提示。
   [ ] **内置音乐是四首商业录音**（见正文「已知限制」）。1.2 那帖就标了这条，仍未解决：
       要么接受、要么替换成可自由分发的曲目再打包。发帖前自己拿主意。

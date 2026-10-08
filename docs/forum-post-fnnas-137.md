@@ -61,10 +61,10 @@
 
 **附件里的 APK 就是最新版，直接下附件最省事**（25.6 MiB）。也可以从发布页下：
 
-- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kungFuCode/fn-tv-photo/releases/latest`
-- GitHub：`https://github.com/kungFuCode-rex/fn-tv-photo/releases/latest`
+- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kungfu%63ode/fn-tv-photo/releases/latest`
+- GitHub：`https://github.com/kungfu%63ode-rex/fn-tv-photo/releases/latest`
 
-> 网址里的大小写是故意写歪的：论坛会把 `kungfu` 里的两个字母自动打码成 `**`。实测 GitHub 和 Gitee 都认大小写，点开仍是同一个页面。**万一还是被打了码，把 `**` 换回 `fu` 即可。**
+> 网址里的 `%63` 就是字母 c：论坛会把 `kungfu` 里的两个字母自动打码掉，写成 `%63` 就能绕开，而浏览器和服务器都会自动还原它，点开是同一个页面（实测两个站点都 302 到最新版那个 tag）。**万一链接还是打不开，直接下帖子附件就行。**
 
 版本信息：
 
@@ -110,10 +110,10 @@
 
 ## 七、开源地址
 
-- Gitee（国内下载 + 镜像）：`https://gitee.com/kungFuCode/fn-tv-photo`
-- GitHub：`https://github.com/kungFuCode-rex/fn-tv-photo`
+- Gitee（国内下载 + 镜像）：`https://gitee.com/kungfu%63ode/fn-tv-photo`
+- GitHub：`https://github.com/kungfu%63ode-rex/fn-tv-photo`
 
-（同样，`kungFuCode` 的大小写是躲论坛打码用的，点开是同一个页面。）
+（`%63` 就是字母 c，用来躲开论坛对 `kungfu` 的自动打码；点开是同一个页面。）
 
 实现过程和踩过的坑都写在 README 里了（这套接口的握手、签名、访问码、自签证书怎么处理，以及升级检测为什么不用 GitHub API），欢迎 star、提 issue、提 PR。
 

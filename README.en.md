@@ -1110,6 +1110,13 @@ And one found by pointing the app at a real NAS for the first time:
   newer answer, so a release published to only one of them is offered by whichever was updated
   and *not* by the other — for a while the two carried different versions, which is survivable
   and was useful as a test, but keeping them in step is the rule.
+- **A *server* release must not become GitHub's "Latest".** The app reads its update manifest from
+  `releases/latest/download/version.json`, which assumes the newest release is an album release with
+  a manifest on it. GitHub marks whichever release was published last as Latest, so publishing
+  `server-v0.1.2` eight minutes after `v1.4.11` pointed that URL at a release with no manifest and it
+  began answering 404 (the alias is CDN-cached, so it did not even look wrong immediately);
+  `v1.4.11` had to be marked Latest again by hand. The workflow now passes `make_latest: false` for
+  server tags, which is the only thing keeping the two products' release streams apart.
 - **Installing from inside the app needs one system grant.** Android 8 and up must first be told
   this app may install apps, and every install still has to be confirmed by the user on the
   system installer's own screen — deliberately; the app never installs anything silently. Some

@@ -1689,3 +1689,17 @@ Docker Hub 之后，把这个二进制下载下来在 WSL 里跑起来（`-versi
 于是先撞上的是每 IP 30 条/分（36 = 30 + 一次窗口翻页）：**测量工具本身把被测对象挡住了**。要看见一个"不看
 来源"的上限，发起方必须真的来自多个地址 —— 这也是这一步非要在 WSL 内部跑的原因，记在这里免得下次又从外面量。
 
+### 17.26 服务端的 release 不许成为 GitHub 的 Latest（2026-10-11 晚）
+
+**现场**：`v1.4.11` 发出去八分钟之后 `server-v0.1.2` 也发了，随后验 `releases/latest/download/version.json`
+回 **404**。应用读升级清单用的就是这个地址（`UpdateChecker` 里 GitHub 的 `manifestUrl`），它假定"最新的
+release 是相册那一版、带着清单"。而 GitHub 的规则是**最后发布**的那个非草稿、非预发布 release 成为 Latest
+—— 两个产品在同一个仓库里发 release，这条规则就会把服务端顶到相册的位置上。
+
+**改法**：`softprops/action-gh-release` 那一步加 `make_latest: false`（只有 `server-v*` 会走到它），并**手工把
+`v1.4.11` 标回 Latest**（`gh release edit v1.4.11 --latest`）—— 已经发出去的那个 release 的标记不会因为
+workflow 改了而回滚。两条附注：这个别名有 CDN 缓存，改完之后 `latest/download/…` 可能还要几分钟才跟着变
+（实测 404 → 302 → 200），"改完立刻还是 404"不等于没生效；另外**不要**用"给服务端的 release 也附一份
+version.json"来绕过它 —— 那份清单里的版本号是相册的版本号，附在服务端 release 上是错的，把两个发布流分开
+才是这条规则真正想要的东西。
+

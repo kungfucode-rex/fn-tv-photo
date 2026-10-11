@@ -119,6 +119,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/server-v')
         uses: softprops/action-gh-release@v2
         with:
+          # **Not the latest release, and that is load-bearing.** The television app's update
+          # check reads `releases/latest/download/version.json` -- the newest release is
+          # assumed to be an *album* release with a manifest on it. GitHub marks whichever
+          # release was published last as Latest, so this step used to steal that pointer the
+          # moment a server tag went out: server-v0.1.2 was published eight minutes after
+          # v1.4.11 and `releases/latest/download/version.json` started answering 404 (the
+          # alias is CDN-cached, so it took a few minutes to even look wrong). v1.4.11 had to
+          # be marked Latest again by hand. A server release is not a newer album release; it
+          # must not be able to become one.
+          make_latest: false
           files: |
             dist/tupingd-linux-amd64
             dist/tupingd-linux-arm64

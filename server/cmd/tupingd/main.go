@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -48,6 +49,7 @@ func run() error {
 		addr        = flag.String("addr", envOr("TUPING_ADDR", ":8080"), "address to listen on")
 		showVersion = flag.Bool("version", false, "print the version and exit")
 		showConfig  = flag.Bool("check", false, "validate configuration and exit")
+		showHealth  = flag.Bool("health", false, "ask this server's own address for /healthz and exit non-zero if it does not answer")
 	)
 	flag.Parse()
 
@@ -65,6 +67,26 @@ func run() error {
 	}
 	cfg.Version = version
 
+	// The certificate is the deployer's to obtain and renew; this process only has to serve
+	// it, to notice a renewal without being restarted, and to say plainly when the two files
+	// it was handed are not a pair that works (§17.23). Read here rather than at the listener
+	// so that `-check` and `-health` cover it too — those are the two commands a deployer runs
+	// on the NAS, and both need to know which scheme this deployment speaks.
+	certFile, keyFile, err := tlsFilesFromEnv()
+	if err != nil {
+		return err
+	}
+	if *showHealth {
+		return selfCheck(*addr, certFile != "")
+	}
+	var certs *certReloader
+	if certFile != "" {
+		if certs, err = newCertReloader(certFile, keyFile, logger); err != nil {
+			return err
+		}
+	}
+	cfg.TLS = certs != nil
+
 	dbPath := envOr("TUPING_DB", "/data/tuping.db")
 	thumbDir := envOr("TUPING_THUMBS", "/data/thumbs")
 	secretPath := envOr("TUPING_SECRET_FILE", secret.DefaultFile(dbPath))
@@ -75,11 +97,15 @@ func run() error {
 			baseURL = "(not set: every URL uses the address the caller used)"
 		}
 		fmt.Printf("baseUrl      = %s\n", baseURL)
+		fmt.Printf("tls          = %s\n", tlsSummary(certs))
 		fmt.Printf("db           = %s\n", dbPath)
 		fmt.Printf("thumbs       = %s\n", thumbDir)
 		fmt.Printf("secret       = %s\n", secret.Inspect(cfg.Secret, secretPath))
 		fmt.Printf("adminToken   = %s\n", setOrNot(cfg.AdminToken))
 		fmt.Printf("registerToken= %s\n", setOrNot(cfg.RegisterToken))
+		if msg := pinnedSchemeMismatch(cfg, certs != nil); msg != "" {
+			fmt.Printf("warning      = %s\n", msg)
+		}
 		return nil
 	}
 
@@ -147,14 +173,47 @@ func run() error {
 		return fmt.Errorf("listen on %s: %w", httpServer.Addr, err)
 	}
 
-	logger.Info("tupingd listening",
+	if certs != nil {
+		// ServeTLS is called below with no file names on purpose: the pair is already here,
+		// and GetCertificate is what re-reads it (§17.23). This is also the call that turns on
+		// HTTP/2 for the guests' phones, which is free and is why the listener is configured
+		// this way rather than by wrapping it in tls.NewListener by hand.
+		httpServer.TLSConfig = &tls.Config{
+			GetCertificate: certs.GetCertificate,
+			MinVersion:     tls.VersionTLS12,
+		}
+	}
+
+	listening := []any{
 		"addr", listener.Addr().String(),
 		"baseUrl", cfg.BaseURL,
 		"version", version,
 		"db", dbPath,
 		"thumbs", thumbDir,
 		"signingKey", string(key.Source),
-	)
+		"tls", certs != nil,
+	}
+	if certs != nil {
+		listening = append(listening, "cert", certFile, "certNotAfter", certs.notAfter().Format(time.RFC3339))
+	}
+	logger.Info("tupingd listening", listening...)
+	if certs != nil {
+		// The one certificate problem a deployer cannot see from inside the container: it is
+		// on a timer they set up months ago, and the timer stopped. An expired certificate is
+		// not a subtle failure — every browser refuses it — but nothing else in this process
+		// would mention it until somebody's phone did.
+		switch left := time.Until(certs.notAfter()); {
+		case left < 0:
+			logger.Error("the certificate has expired: browsers will refuse it until it is replaced",
+				"notAfter", certs.notAfter().Format(time.RFC3339))
+		case left < 14*24*time.Hour:
+			logger.Warn("the certificate expires soon; check whatever is supposed to renew it",
+				"notAfter", certs.notAfter().Format(time.RFC3339), "in", left.Round(time.Hour).String())
+		}
+	}
+	if msg := pinnedSchemeMismatch(cfg, certs != nil); msg != "" {
+		logger.Warn(msg, "baseUrl", cfg.BaseURL)
+	}
 	if cfg.BaseURL == "" {
 		// Not a warning: this is the default shape since §17.20, and the address a phone
 		// needs is one only the caller knows. Said once at startup so that a deployer
@@ -170,7 +229,13 @@ func run() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		if err := httpServer.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		var err error
+		if certs != nil {
+			err = httpServer.ServeTLS(listener, "", "")
+		} else {
+			err = httpServer.Serve(listener)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -245,6 +310,29 @@ func setOrNot(v string) string {
 		return "(not set)"
 	}
 	return "(set)"
+}
+
+// tlsSummary is what `-check` prints for the transport: the two files, who they were issued
+// to, and when they stop working.
+func tlsSummary(certs *certReloader) string {
+	if certs == nil {
+		return "off (plain http)"
+	}
+	return certs.describe()
+}
+
+// pinnedSchemeMismatch names the one combination that produces dead links: this process speaks
+// https, so nothing answers on http any more, and every QR code is nevertheless built from an
+// http:// pin. Unlike the private-address warning (§11.5) there is no deployment in which this
+// is deliberate — the reverse case, a TLS-terminating proxy in front of a *plain* tupingd, is
+// a perfectly good shape and is deliberately not warned about.
+func pinnedSchemeMismatch(cfg api.Config, tls bool) string {
+	if !tls || !strings.HasPrefix(cfg.BaseURL, "http://") {
+		return ""
+	}
+	return fmt.Sprintf("TUPING_BASE_URL is %s but this server speaks https, so every QR code and every link "+
+		"points at an address nothing answers on; make it https://, or drop it and let the address come from "+
+		"whoever is connecting", cfg.BaseURL)
 }
 
 // isLoopbackBaseURL spots the configuration mistake §11.5 calls out by name.

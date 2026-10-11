@@ -158,36 +158,48 @@ README 出发，照下面做就能跑起来。更细的说明（环境变量全�
 - 电视上先装好 FN Photo（见上面的**安装**）；
 - 一个空闲端口（默认 8080）和一个目录（放数据）。
 
-**这个端口不要映射到公网。** 它是明文 HTTP、除了一个管理员口令没有账号体系、评论对所有能连到它的人可见。
-局域网是它的设计边界。
+**这个端口不要映射到公网。** 它除了一个管理员口令没有账号体系、评论对所有能连到它的人可见，局域网是它的
+设计边界。它默认说明文 HTTP，也能直接说 HTTPS（见下面的**要 HTTPS 的话**）—— 但这只保护路上那一段，边界
+不因此改变。
 
 ### 一份文件就够（推荐）
 
 镜像发布在 Docker Hub，而且是**多架构**的：amd64 还是 arm64 由镜像自己的清单决定 —— 不用挑二进制、不用管
 Dockerfile、也不用在同一个目录里凑文件。
 
-飞牛 **Docker 应用 → Compose → 新增项目**：项目名 `tuping`，把下面这段粘进去，改一行口令，点**启动**
-（这条路**没有「构建」**，只是把镜像拉下来）：
+飞牛 **Docker 应用 → Compose → 新增项目**：项目名 `tuping`，把下面这段粘进去，把 `TUPING_ADMIN_TOKEN`
+换成你的口令，点**启动**（这条路**没有「构建」**，只是把镜像拉下来）：
 
 ```yaml
 services:
   tuping:
-    image: kungfucode/tuping:0.1.0     # 发布镜像，Docker Hub 上的 kungfucode/tuping
-    container_name: tuping
-    restart: unless-stopped
+    image: "kungfucode/tuping:0.1.1"
+    container_name: "tuping"
+    restart: "unless-stopped"
     ports:
-      - "8080:8080"                    # 左边是 NAS 上的端口；被占用就改成别的，例如 8090:8080
+      - "8080:8080"
     volumes:
-      - ./data:/data                   # 评论、缩略图、签名密钥都在这个目录里
+      - "./data:/data"
     environment:
-      TUPING_ADMIN_TOKEN: "change-me"  # ← 唯一要改的一行：管理员口令
+      TUPING_ADMIN_TOKEN: "change-me"
 ```
+
+`8080` 左边那个是 NAS 上的端口（被占用就改成 `8090:8080` 之类，电视和手机上用的地址也跟着带端口）；
+`./data` 是评论、缩略图、签名密钥落地的目录；`container_name` 让容器就叫 `tuping`（下面那些
+`docker exec tuping …` 用的是这个名字）。
+
+> **这段每行都很短、每个值都带引号，是有意的**：从渲染过的页面复制时，有些工具会按窗口宽度重排长行，
+> 而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.1` 会变成两行、
+> `unless-stopped` 会变成 `unless-` + `stopped`，整段就解析失败（报错通常是 `expected <block end>`）。
+> 引号里的内容不会被拆，所以值一律加引号。粘完扫一眼，被拆开了就把值接回冒号后面那一行。不想冒这个险
+> 就别粘：用文件管理把 [`server/docker-compose.image.yml`](server/docker-compose.image.yml) 传进一个
+> 目录、在面板里按**路径**建项目，或者直接用下面那条命令。
 
 没有 Compose 的场合，等价的一条命令：
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.0
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.1
 ```
 
 | 变量 | 填什么 |
@@ -198,6 +210,44 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 （二维码里的地址）默认取"谁在连"的那个地址 —— 二维码里的地址本来就是电视注册照片时上报的那个。
 带全部注释的同一份在 [`server/docker-compose.image.yml`](server/docker-compose.image.yml)。
 
+### 要 HTTPS 的话
+
+> **前提：镜像是包含这个特性的那一版。** 这个特性是 **0.1.1** 才有的：更早的镜像（包括
+> `kungfucode/tuping:0.1.0`）**没有** TLS 支持，设了这两个变量它既不生效、也不报错，现象就是
+> **http 照常、https 连不上**（用 https 连一个说明文的端口，会得到一个 400）。上面 compose 里
+> pin 的就是 0.1.1；手上是更早的镜像就换 tag，或者走**自己构建镜像**那条路。
+> 30 秒确认正在跑的那个二进制认不认（`docker exec` 要能 SSH；不想 SSH 就看面板日志里
+> `tupingd listening` 那行有没有 `tls=` 字段）：
+>
+> ```sh
+> docker exec tuping /usr/local/bin/tupingd -check | grep '^tls'
+> ```
+>
+> 有 `tls = off (plain http)` / `tls = on (…)` 就是认识；**一行都没有**就是这个二进制太旧。
+
+**证书是你的事，说 HTTPS 是服务端的事。** 上面那份 compose 加三处就有 HTTPS（域名、端口映射、证书申请与
+续期都由你决定怎么做 —— ACME 客户端、反代、隧道都行）：
+
+```yaml
+    ports:
+      - "443:8080"
+    volumes:
+      - "./certs:/certs:ro"
+    environment:
+      TUPING_TLS_CERT: "/certs/fullchain.pem"
+      TUPING_TLS_KEY: "/certs/privkey.pem"
+```
+
+（`443:8080` 的左边是 NAS 上的端口，手机上不用再写端口；`./certs` 放证书和私钥，要能被 uid 10001 读到。）
+
+然后电视上把**图评服务器**改成 `https://你的域名`。二维码里的地址是电视上报的，所以扫出来的码自然也是
+https。几件顺带的事：cookie 自动带上 `Secure`、页面和二维码里的链接自动变 https、HTTP/2 白拿、证书文件被
+换掉之后**不用重启**容器（ACME 续期照常工作）。
+
+两个坑值得先知道：**两个变量必须成对**（只设一个会启动失败并点名缺的那个，不会悄悄退回明文）；**自签证书
+对客人没用** —— 二维码是给别人的手机扫的，微信会拦住不受信任的证书，想要绿锁就得是真证书。
+全部细节在 [`server/README.md`](server/README.md) 的 **HTTPS** 一节。
+
 ### 三步验收
 
 1. **看日志**：容器起来后，日志里应该有这两行 —— 少了任何一行都是出问题了：
@@ -207,7 +257,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.0",...}`。
+2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.1",...}`。
 3. **进管理页**：手机打开 `http://<NAS 地址>:8080/admin`，用第 2 步那个口令登录，能看到审核队列就好。
 
 然后电视：设置里「图评服务器」填**同一个地址**（`http://192.168.31.14:8080` 这种，手机也得能打开它），
@@ -221,11 +271,15 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 | 容器反复重启，日志 `unable to open database file` | 数据目录的属主和容器里的 uid 对不上。镜像自己会处理（以 root 起步、接管 `data/` 属主、随即降为 uid 10001），所以正常情况下不会出现；只有挂载在 SMB/CIFS 这类不支持 `chown` 的地方，才需要给服务加一行 `user: "0:0"`。 |
 | 起不来，`port is already allocated` | 8080 被别的容器占了：把 `"8080:8080"` 左边改掉（例如 `"8090:8080"`），电视和手机上用的地址也要跟着带端口。 |
 | 二维码扫了打不开 | 二维码里的地址是电视上报的：先在电视上确认那行地址**手机也能打开**（同局域网、端口对得上），然后在电视上重新注册这张照片。 |
+| 配了 HTTPS，但 http 照常、https 连不上 | 按顺序查两件事：① 在容器里跑 `/usr/local/bin/tupingd -check`，**输出里根本没有 `tls` 那一行** = 这个二进制不认识 TLS（`kungfucode/tuping:0.1.0` 及更早就是，0.1.1 起才有），把镜像 tag 换成 0.1.1 或自己构建；② 有 `tls` 却仍是 `off`／日志那行是 `tls=false` = 环境变量没进容器：改完 compose 必须点**「启动 / 重新部署」**，只点「重启」不算。 |
+| 配了 HTTPS，二维码却还是 `http://…` | 那张照片是电视用 http 注册的：把电视上的「图评服务器」改成 `https://…` 再注册一次，或者在 compose 里钉 `TUPING_BASE_URL: "https://你的域名"`。 |
+| 配了 HTTPS 之后容器一直 unhealthy | 旧 compose 里那句健康检查是 `wget http://127.0.0.1:8080/healthz`，TLS 下必然失败 —— 服务没坏。换成二进制自己的探针：`test: ["CMD", "/usr/local/bin/tupingd", "-health"]`。 |
 
 ### 升级 / 备份 / 卸载
 
-- **升级**：把 compose 里的 `0.1.0` 换成新版本，点「启动 / 重新部署」—— 只有这一步会用新镜像重建容器，
-  只点「重启」不会换镜像。
+- **升级**：把 compose 里的镜像 tag 换成新版本，点「启动 / 重新部署」—— 只有这一步会用新镜像重建容器，
+  只点「重启」不会换镜像，**也不会把新的环境变量装进容器**（加 `TUPING_TLS_CERT` 之后只重启，就是
+  "配了 HTTPS 但 http 照旧"最常见的原因）。
 - **备份**：`data/` 里三样东西 —— `tuping.db`（评论）、`thumbs/`（缩略图）、`secret`（签名密钥）。
   前两个必须备；`secret` 丢了只是让管理员重新登录一次。
 - **卸载**：停掉项目、删掉容器；想连评论一起清掉就删 `data/` 目录。
@@ -236,7 +290,7 @@ NAS 出不了外网、或者你想改 Dockerfile / 改代码，就走这一条�
 目录，在面板里点「构建 → 启动」（[`dist/`](server/README.md) 里或 release 附件里）：
 
 ```powershell
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.0
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.1
 ```
 
 ```

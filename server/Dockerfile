@@ -38,6 +38,9 @@ VOLUME ["/data"]
 #
 # The chown above still matters: a named or anonymous volume is initialised from this
 # layer, ownership included, so that case works without any privileged step at all.
+#
+# With TUPING_TLS_CERT/TUPING_TLS_KEY set the same port speaks https, so a deployment with a
+# certificate maps 443 to it rather than 80; nothing else changes (§17.23).
 EXPOSE 8080
 
 # TZ is why the log timestamps read 17:42 and not 09:42: tzdata alone only means the zone
@@ -52,7 +55,13 @@ ENV TZ="Asia/Shanghai" \
 
 # The image tag is the version; -ldflags -X main.version carries it into the
 # binary, so /healthz can say which build answered.
+#
+# The probe is the binary itself rather than wget, because the health check has to be right in
+# both shapes without knowing which one it is in: `-health` dials the scheme the environment
+# configures, and a certificate issued to a real domain is never valid for 127.0.0.1, so a wget
+# over https would call a perfectly working TLS deployment unhealthy
+# (docs/tuping-design.md §17.23).
 HEALTHCHECK --interval=60s --timeout=5s --start-period=5s \
-    CMD wget -q -O - http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1
+    CMD ["/usr/local/bin/tupingd", "-health"]
 
 ENTRYPOINT ["/usr/local/bin/tupingd"]

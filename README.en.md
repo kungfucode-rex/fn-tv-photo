@@ -459,9 +459,10 @@ source) is [`server/README.md`](server/README.md).
 - FN Photo installed on the television first (see **Install** above);
 - A free port (8080 by default) and a directory for the data.
 
-**Do not expose this port to the internet.** It is plaintext HTTP, it has no account system beyond the
-single admin password, and comments are visible to anybody who can reach it. A LAN is the boundary it was
-designed for.
+**Do not expose this port to the internet.** It has no account system beyond the single admin password, and
+comments are visible to anybody who can reach it. A LAN is the boundary it was designed for. It speaks
+plaintext HTTP by default and can also speak HTTPS directly (see **If you want HTTPS** below) — that protects
+the wire, it does not move the boundary.
 
 ### One file is enough (recommended)
 
@@ -469,28 +470,41 @@ The image is published on Docker Hub and it is **multi-architecture** — amd64 
 image's own manifest, so there is no binary to pick, no Dockerfile, and no pile of files to gather in one
 directory.
 
-In fnOS: **Docker app → Compose → Add project**, name it `tuping`, paste the block below, change the one
-password line, press **Start** (this path has **no build step** at all — it only pulls):
+In fnOS: **Docker app → Compose → Add project**, name it `tuping`, paste the block below, replace
+`TUPING_ADMIN_TOKEN` with your password, press **Start** (this path has **no build step** at all — it only
+pulls):
 
 ```yaml
 services:
   tuping:
-    image: kungfucode/tuping:0.1.0     # published on Docker Hub as kungfucode/tuping
-    container_name: tuping
-    restart: unless-stopped
+    image: "kungfucode/tuping:0.1.1"
+    container_name: "tuping"
+    restart: "unless-stopped"
     ports:
-      - "8080:8080"                    # left side is the NAS port; if it is taken use 8090:8080
+      - "8080:8080"
     volumes:
-      - ./data:/data                   # comments, thumbnails and the signing key live here
+      - "./data:/data"
     environment:
-      TUPING_ADMIN_TOKEN: "change-me"  # ← the only line to change: the admin password
+      TUPING_ADMIN_TOKEN: "change-me"
 ```
+
+The left side of `8080` is the NAS port (if it is taken use `8090:8080` and put that port in the television's
+address too); `./data` is where the comments, thumbnails and signing key land; `container_name` is what makes the
+container simply `tuping` (the `docker exec tuping …` commands below use that name).
+
+> **Every line above is short and every value is quoted, on purpose.** When text is copied out of a rendered
+> page, some tools re-wrap long lines to the window width and break **unquoted** values at `:` and `-` —
+> `kungfucode/tuping:0.1.1` comes out as two lines and `unless-stopped` as `unless-` plus `stopped`, and the
+> whole block fails to parse (usually with `expected <block end>`). Quoted text is not broken, so the values
+> are all quoted. After pasting, glance at the lines and join any that were split. If you would rather not
+> risk it, do not paste at all: copy [`server/docker-compose.image.yml`](server/docker-compose.image.yml) into
+> a directory with the file manager and create the project by **path**, or use the one command below.
 
 Without Compose, the same thing as one command:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your password' kungfucode/tuping:0.1.0
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your password' kungfucode/tuping:0.1.1
 ```
 
 | Variable | What to put there |
@@ -502,6 +516,50 @@ Nothing else needs filling in: `TUPING_SECRET` is minted on first start and kept
 comes from anyway, reported by the television. The same file with every option commented lives in
 [`server/docker-compose.image.yml`](server/docker-compose.image.yml).
 
+### If you want HTTPS
+
+> **First: the image has to be one that has this.** TLS arrived in **0.1.1**; earlier images (including
+> `kungfucode/tuping:0.1.0`) **have no TLS support at all**, so setting these two variables does nothing and
+> says nothing — the symptom is exactly **http keeps working and https does not** (an https request to a
+> cleartext port gets a 400). The compose above pins 0.1.1; if you are on something older, move the tag or take
+> the **build the image yourself** path. Thirty seconds tells you which binary you are running (`docker exec`
+> needs SSH; without it, look for a `tls=` field on the `tupingd listening` line in the panel's log):
+>
+> ```sh
+> docker exec tuping /usr/local/bin/tupingd -check | grep '^tls'
+> ```
+>
+> `tls = off (plain http)` or `tls = on (…)` means the binary knows about it; **no line at all** means the
+> binary predates the feature.
+
+**The certificate is your business; speaking HTTPS is the server's.** Three changes to the compose file above
+get you there — the domain, the port mapping and whatever obtains and renews the certificate are your call (an
+ACME client, a reverse proxy, a tunnel all work):
+
+```yaml
+    ports:
+      - "443:8080"
+    volumes:
+      - "./certs:/certs:ro"
+    environment:
+      TUPING_TLS_CERT: "/certs/fullchain.pem"
+      TUPING_TLS_KEY: "/certs/privkey.pem"
+```
+
+(The left side of `443:8080` is the NAS port, so the phone no longer types one; `./certs` holds the certificate
+and key and must be readable by uid 10001.)
+
+Then set the television's **图评服务器** row to `https://your.domain`. The address inside a QR code is the one
+the television reports, so the codes come out https too. Three things follow for free: cookies get their
+`Secure` flag, every link and QR code turns https, and HTTP/2 comes with it. The certificate **can be replaced
+without restarting the container**, so an ACME renewal needs nothing from you.
+
+Two traps worth knowing first: **the two variables must be set together** (setting one stops the container and
+names the one that is missing, rather than quietly serving cleartext); and **a self-signed certificate is
+useless to your guests** — the QR code is scanned by *their* phones and WeChat refuses an untrusted
+certificate, so a green padlock means a real one. The full detail is the **HTTPS** section of
+[`server/README.md`](server/README.md).
+
 ### Three steps to know it works
 
 1. **Read the log.** Two lines have to be there — missing either one means something is wrong:
@@ -511,7 +569,7 @@ comes from anyway, reported by the television. The same file with every option c
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **Ask the server.** `curl http://<nas>:8080/healthz` → `{"ok":true,"version":"0.1.0",...}`.
+2. **Ask the server.** `curl http://<nas>:8080/healthz` → `{"ok":true,"version":"0.1.1",...}`.
 3. **Open the admin page.** On a phone, `http://<nas>:8080/admin`, log in with the password from step 2;
    seeing the moderation queue means everything works.
 
@@ -527,10 +585,13 @@ writes a comment; the comment floats across the screen.
 | The container restarts forever, log says `unable to open database file` | The data directory's owner and the container's uid disagree. The image handles that itself (starts as root, takes ownership of `data/`, drops to uid 10001), so this should not happen; only on a mount that refuses `chown` (SMB/CIFS) do you add `user: "0:0"` to the service. |
 | `port is already allocated` | 8080 is taken by another container: change the left side of `"8080:8080"` (say `"8090:8080"`) and use that port everywhere, including the television. |
 | The QR code scans into nothing | The address inside it is the one the television reported: check that the address in the television's own row is one the *phone* can open (same LAN, right port), then register the photo again from the television. |
+| HTTPS is on but the QR code still says `http://…` | That photo was registered by a television still using http: change its **图评服务器** row to `https://…` and register again, or pin `TUPING_BASE_URL: "https://your.domain"` in the compose file. |
+| HTTPS configured, but http still works and https does not | Two things, in this order: ① `/usr/local/bin/tupingd -check` inside the container printing **no `tls` line at all** means this binary does not know about TLS (`kungfucode/tuping:0.1.0` and earlier; 0.1.1 is the first with it) — move the tag to 0.1.1 or build it yourself; ② a `tls = off` line, or `tls=false` on the listening log line, means the variables never reached the container: after editing the compose file you must press **Start / redeploy**, not **Restart**. |
+| The container stays unhealthy after enabling HTTPS | The old compose file's health check is `wget http://127.0.0.1:8080/healthz`, which cannot work over TLS — the service is fine. Switch to the binary's own probe: `test: ["CMD", "/usr/local/bin/tupingd", "-health"]`. |
 
 ### Upgrading, backing up, removing
 
-- **Upgrade**: change `0.1.0` in the compose file to the new version and press **Start** (or "redeploy") —
+- **Upgrade**: change the image tag in the compose file to the new version and press **Start** (or "redeploy") —
   that is the only button that recreates the container on the new image. "Restart" alone does not.
 - **Backup**: three things in `data/` — `tuping.db` (the comments), `thumbs/` (thumbnails) and `secret`
   (the signing key). The first two are what a backup needs; losing `secret` only costs the admin one more
@@ -545,7 +606,7 @@ the NAS instead: four files in **one directory**, then **Build** and **Start** i
 `dist/`, or from the release attachments):
 
 ```powershell
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.0
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.1
 ```
 
 ```

@@ -17,8 +17,9 @@ import (
 )
 
 // newHarnessWithBaseURL is [newHarness] with the one setting most likely to be wrong left
-// to the caller.
-func newHarnessWithBaseURL(t *testing.T, baseURL string) *harness {
+// to the caller, and an optional chance to change anything else (§17.23's TLS flag is the
+// reason it takes one).
+func newHarnessWithBaseURL(t *testing.T, baseURL string, mutate ...func(*Config)) *harness {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -31,13 +32,18 @@ func newHarnessWithBaseURL(t *testing.T, baseURL string) *harness {
 		t.Fatalf("open thumbs: %v", err)
 	}
 
+	cfg := Config{
+		BaseURL:                baseURL,
+		Secret:                 "test-secret-that-is-long-enough",
+		DeviceRegistrationOpen: true,
+		Version:                "test",
+	}
+	for _, m := range mutate {
+		m(&cfg)
+	}
+
 	server, err := New(Options{
-		Config: Config{
-			BaseURL:                baseURL,
-			Secret:                 "test-secret-that-is-long-enough",
-			DeviceRegistrationOpen: true,
-			Version:                "test",
-		},
+		Config: cfg,
 		Store:  st,
 		Thumbs: thumbStore,
 		// io.Discard would hide the very warning this file is about, and a test that cannot

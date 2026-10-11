@@ -89,7 +89,7 @@ func (s *Server) isAdmin(r *http.Request) bool {
 	return constantTimeEquals(s.adminSession(exp), c.Value)
 }
 
-func (s *Server) setAdminCookie(w http.ResponseWriter) {
+func (s *Server) setAdminCookie(w http.ResponseWriter, r *http.Request) {
 	exp := time.Now().Add(adminSessionTTL).UnixMilli()
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminCookie,
@@ -97,19 +97,24 @@ func (s *Server) setAdminCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   int(adminSessionTTL.Seconds()),
 		HttpOnly: true,
+		Secure:   cookieSecure(r),
 		SameSite: http.SameSiteLaxMode,
-		// Not Secure, for the same reason the guest cookies are not: this page is served
-		// over plain http on a LAN and a Secure cookie would never come back (§10.1).
+		// Secure on the connection it was handed out on, and not otherwise: this page is
+		// usually served over plain http on a LAN, where a Secure cookie would never come
+		// back at all (§10.1) — but as soon as the deployer terminates TLS, this cookie is a
+		// bearer token for every comment on the instance and belongs to the encrypted half of
+		// the web (§17.23).
 	})
 }
 
-func (s *Server) clearAdminCookie(w http.ResponseWriter) {
+func (s *Server) clearAdminCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminCookie,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   cookieSecure(r),
 		SameSite: http.SameSiteLaxMode,
 	})
 }
@@ -198,7 +203,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.log.Info("admin logged in", "ip", ip)
-	s.setAdminCookie(w)
+	s.setAdminCookie(w, r)
 	if next == "" {
 		// /admin itself, which now says 已经登录了 and offers the way back out. Bouncing
 		// to /healthz would answer a login with a JSON document.
@@ -210,7 +215,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 // handleAdminLogout is POST /admin/logout. POST and not GET: a GET logout is something a
 // stray <img> on another page can trigger, and it is also what a browser prefetches.
 func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
-	s.clearAdminCookie(w)
+	s.clearAdminCookie(w, r)
 	s.log.Info("admin logged out", "ip", s.hmacIP(clientIP(r)))
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

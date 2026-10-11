@@ -62,6 +62,13 @@ type Config struct {
 	// Version is stamped in at link time.
 	Version string
 
+	// TLS says this process terminates TLS itself (docs/tuping-design.md §17.23). The
+	// transport is the listener's business and nothing in the routing table changes, but two
+	// things need to know: the cookies handed out get their Secure flag from the connection
+	// they arrive on, and /healthz can answer "are my certificate variables actually in
+	// effect" where a person is already looking.
+	TLS bool
+
 	// DeviceRegistrationOpen lets a device obtain a token without the register
 	// token. On a LAN this is the friendly default; it is the one knob that makes
 	// the instance private again.
@@ -292,6 +299,17 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// cookieSecure is the Secure flag for every cookie this server hands out.
+//
+// Off on the plain-http LAN deployment, and that is not laziness: a Secure cookie is simply
+// never sent back over http, so setting the flag there would silently delete the features the
+// cookies carry — the guest's remembered nickname, the guest's identity for rate limiting, the
+// admin session (§10.1, §17.15). Under TLS the same argument runs the other way, and leaving
+// it off is the bug: the admin cookie is a bearer token for every comment on the instance.
+func cookieSecure(r *http.Request) bool {
+	return r != nil && r.TLS != nil
 }
 
 func (s *Server) hmacIP(ip string) string {
@@ -545,14 +563,30 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"thumbBytes":    thumbBytes,
 		"baseUrl":       s.cfg.BaseURL,
 		"baseUrlSource": "TUPING_BASE_URL",
+		// Whether this process terminates TLS itself, which is the one thing a deployer cannot
+		// confirm from the NAS panel: `curl -k https://…/healthz` answering at all is most of
+		// the proof, and this field is the rest of it (§17.23).
+		"tls": s.cfg.TLS,
 	}
 	if s.cfg.BaseURL == "" {
 		body["baseUrlSource"] = "the address each caller used"
 	}
+	// Warnings are collected rather than assigned: two of them can be true at once (a private
+	// address *and* an http:// pin under TLS), and the second one silently replacing the first
+	// is how a health check stops being worth reading.
+	var warnings []string
 	if hostIsPrivate(s.cfg.BaseURL) {
-		body["warning"] = "TUPING_BASE_URL is a private address; a phone that is not on " +
-			"this network cannot open the QR code. Set it to the address phones actually " +
-			"reach, and restart."
+		warnings = append(warnings, "TUPING_BASE_URL is a private address; a phone that is not on "+
+			"this network cannot open the QR code. Set it to the address phones actually "+
+			"reach, and restart.")
+	}
+	if s.cfg.TLS && strings.HasPrefix(s.cfg.BaseURL, "http://") {
+		warnings = append(warnings, "TUPING_BASE_URL is http:// but this server speaks https, so "+
+			"every QR code and every link points at an address nothing answers on; make it "+
+			"https://, or drop it and let the address come from whoever is connecting.")
+	}
+	if len(warnings) > 0 {
+		body["warning"] = strings.Join(warnings, " ")
 	}
 	writeJSON(w, http.StatusOK, body)
 }

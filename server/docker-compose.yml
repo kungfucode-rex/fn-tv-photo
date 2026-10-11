@@ -25,6 +25,10 @@ services:
     container_name: tuping
     restart: unless-stopped
     ports:
+      # With no certificate this is http. With TUPING_TLS_CERT/TUPING_TLS_KEY set the same
+      # container port speaks https, and the left-hand side is what a phone types — so a
+      # deployment with a real certificate maps "443:8080", and the QR codes then read
+      # https://<domain>/c/<code> with no port at all (§17.23).
       - "8080:8080"
     # Nothing here needs to be chowned by hand: the container starts as root, the binary
     # hands the data directory to uid 10001 and then gives root up before it opens the
@@ -77,6 +81,27 @@ services:
       # wider than "everyone who should be able to post".
       # TUPING_REGISTER_TOKEN: "<optional>"
 
+      # HTTPS: mount a certificate and a private key, and set both paths to the files inside
+      # it. Obtaining and renewing them is yours to do — an ACME client writing into a directory
+      # next to this file is the usual shape — and the server re-reads the files when they
+      # change, so a renewal needs no restart. Setting only one of the two stops the container
+      # at start-up naming the variable that is missing, rather than quietly serving cleartext
+      # (§17.23). Both files must be readable by uid 10001.
+      #
+      # This file builds the image from the binary in dist/, so TLS depends on how new that
+      # binary is: after uploading a new one, press Build and then Start/redeploy. Confirm what
+      # is running with `docker exec tuping /usr/local/bin/tupingd -check` — a `tls = …` line
+      # means the binary knows about it, no such line means it predates the feature.
+      #
+      # In this file that is one mount on the service plus two keys here:
+      #   volumes:   - /vol1/docker/tuping/certs:/certs:ro
+      #   environment: TUPING_TLS_CERT: "/certs/fullchain.pem"
+      #                TUPING_TLS_KEY:  "/certs/privkey.pem"
+      #
+      # Then map "443:8080" above, and either pin the address the guests type
+      # (TUPING_BASE_URL: "https://photos.example.com") or leave it empty and let the
+      # television report the address it just connected on.
+
       # Uncomment to close device registration completely: only devices that
       # already hold a token may register. The friendliest default is open, and
       # this is the one switch that makes the instance private again.
@@ -91,7 +116,10 @@ services:
       # TUPING_THUMB_TTL: "720h"
 
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      # The binary probes itself, so this line is correct whether the container speaks http or
+      # https: it dials the scheme the environment above configures, and it does not care that
+      # a public certificate is not valid for 127.0.0.1 (§17.23).
+      test: ["CMD", "/usr/local/bin/tupingd", "-health"]
       interval: 60s
       timeout: 5s
       retries: 3

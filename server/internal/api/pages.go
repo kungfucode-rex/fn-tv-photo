@@ -225,7 +225,7 @@ func (s *Server) handlePageSubmit(w http.ResponseWriter, r *http.Request) {
 		outcome = "ok=held"
 	}
 	// Remember the name for next time, before the redirect writes its own headers.
-	setNameCookie(w, nickname)
+	setNameCookie(w, r, nickname)
 	http.Redirect(w, r, fmt.Sprintf("/c/%s?%s&mine=%s", code, outcome, comment.ID), http.StatusSeeOther)
 }
 

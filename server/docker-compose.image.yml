@@ -8,10 +8,13 @@
 services:
   tuping:
     # 换成发布镜像的那个命名空间。镜像发布在 Docker Hub，用国内加速源可以拉。
-    image: kungfucode/tuping:0.1.0
+    # 0.1.1 起服务端自己会说 HTTPS；0.1.0 及更早的镜像没有 TLS 那段代码。
+    image: kungfucode/tuping:0.1.1
     container_name: tuping
     restart: unless-stopped
     ports:
+      # 左边是 NAS 上的端口。要开 HTTPS 就把它改成 "443:8080"（见下面 environment 里那段注释），
+      # 二维码里的地址会跟着变成 https://<域名>/c/<短码>，不带端口。
       - "8080:8080"
 
     # 数据目录的属主：镜像自己会处理 —— 容器以 root 起步，二进制把 data/（含里面已有的
@@ -39,11 +42,37 @@ services:
       # 要求注册照片时带共享令牌（办公室/宿舍这类不信任局域网时用）。
       # TUPING_REGISTER_TOKEN: "<optional>"
       #
+      # HTTPS：证书和私钥是你的事（ACME 客户端写到一个目录里是最常见的形状），服务器只负责
+      # 用它们服务。
+      #
+      # 但先看这一条：**0.1.0 及更早的镜像里没有 TLS 这段代码**，设了下面两个变量它们既不生效
+      # 也不报错 —— 现象就是 http 照常、https 连不上（上面 pin 的 0.1.1 有）。确认正在跑的
+      # 那个二进制认不认：
+      #   docker exec tuping /usr/local/bin/tupingd -check | grep '^tls'
+      # 有输出（off 或 on）就是认识；一行都没有就是太旧。
+      #
+      # 两个变量给两个文件的路径，并且都要能被 uid 10001 读到；只设一个会**启动失败并点名缺的
+      # 那个**，而不是悄悄退回明文。证书文件被换掉之后服务器会自己重读，续期不需要重启
+      # （docs/tuping-design.md §17.23）。
+      #
+      # 在这份文件里就是服务上加一个挂载、这里加两个键：
+      #   volumes:     - /vol1/docker/tuping/certs:/certs:ro
+      #   environment: TUPING_TLS_CERT: "/certs/fullchain.pem"
+      #                TUPING_TLS_KEY:  "/certs/privkey.pem"
+      #
+      # 然后端口映射改成 "443:8080"。地址可以钉死（域名必须和证书对得上）：
+      # TUPING_BASE_URL: "https://photos.example.com"
+      # 也可以留空 —— 电视注册照片时会把自己连通的那个地址报上来，那里天然就是 https。
+      #
       # 日志时间戳的时区，镜像里已经是 Asia/Shanghai。
       # TZ: "Asia/Shanghai"
 
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      # 两段是有意的：前一段是二进制自己的 -health，它按环境变量里配置的协议去探测自己，所以
+      # 明文和 HTTPS 都对，而且不会每分钟往日志里留一行失败的 TLS 握手；后一段是给 0.1.0 这类
+      # 更早的镜像兜底（它们还没有 -health，明文 http 直接就能答）。任意一段成功即健康。
+      # 用 wget 直接探 https 是不行的：证书从来不是签给 127.0.0.1 的，结论永远是"不健康"（§17.23）。
+      test: ["CMD-SHELL", "/usr/local/bin/tupingd -health || wget -q -O - http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
       interval: 60s
       timeout: 5s
       retries: 3

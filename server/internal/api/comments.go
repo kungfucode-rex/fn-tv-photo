@@ -237,7 +237,7 @@ const nameCookie = "tuping_name"
 // setNameCookie remembers a nickname worth remembering: one the guest actually typed. A
 // blank submission leaves whatever was there alone, so clearing the field and posting does
 // not freeze the default into the box.
-func setNameCookie(w http.ResponseWriter, nickname string) {
+func setNameCookie(w http.ResponseWriter, r *http.Request, nickname string) {
 	if nickname == "" {
 		return
 	}
@@ -247,9 +247,10 @@ func setNameCookie(w http.ResponseWriter, nickname string) {
 		Path:     "/",
 		MaxAge:   365 * 24 * 60 * 60,
 		HttpOnly: true,
+		Secure:   cookieSecure(r),
 		SameSite: http.SameSiteLaxMode,
-		// Not Secure, for the same reason the anon cookie is not: this page is served
-		// over plain http on a LAN and a Secure cookie would never come back (§10.1).
+		// Secure only when the connection was: see cookieSecure for why both directions of
+		// this flag are wrong on the deployment the other one belongs to.
 	})
 }
 
@@ -281,9 +282,11 @@ func (s *Server) ensureAnonCookie(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		MaxAge:   365 * 24 * 60 * 60,
 		HttpOnly: true,
+		Secure:   cookieSecure(r),
 		SameSite: http.SameSiteLaxMode,
-		// Not Secure: this page is served over plain http on a LAN, and a Secure
-		// cookie would simply never be sent back (§10.1).
+		// Secure only over TLS: on the plain-http LAN deployment a Secure cookie would simply
+		// never be sent back, and the guest would get a new identity on every page view
+		// (§10.1, §17.23).
 	})
 }
 

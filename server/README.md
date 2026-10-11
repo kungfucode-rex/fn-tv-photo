@@ -53,9 +53,23 @@ curl http://192.168.31.14:8080/healthz
 
 **拉不动镜像的话**，那是 NAS 的镜像源问题，不是这份 compose 的：飞牛默认的 `docker.fnnas.com` 会回
 `401 Unauthorized`，直连 Docker Hub 在国内又常被重置（`connection reset by peer`）。在 Docker 应用的
-**镜像 → 仓库设置** 里换成能用的加速源（实测可用：`https://docker.1panel.live`、
-`https://docker.xuanyuan.me`），然后**在面板右上角把 Docker 服务停止再启动**（改镜像源必须重启
-daemon），再去启动。镜像是发布在 Docker Hub 上的，所以这些加速源正好都能转。
+**镜像 → 仓库设置** 里换成能用的加速源，然后**在面板右上角把 Docker 服务停止再启动**（改镜像源必须重启
+daemon），再去启动。
+
+要注意的是：**有些加速源只镜像 Docker Hub 的官方镜像**，对 `kungfucode/tuping` 这种仓库直接回 `403`
+（403 而不是 401，意味着它连认证流程都不给，客户端只能失败）。2026-10-11 匿名拉取本镜像 manifest 的实测：
+
+| 加速源 | 能拉到本镜像吗 |
+| --- | --- |
+| `https://dockerproxy.net` | ✅ 200 |
+| `https://hub.1panel.dev` | ✅ 200 |
+| `https://docker.m.daocloud.io` | 401 → 客户端会照它给的 challenge 取 token，通常可用 |
+| `https://hub.rat.dev` | 302 → 客户端跟随，通常可用 |
+| `https://docker.1panel.live`、`https://docker.xuanyuan.me` | ❌ 403：只放官方镜像（它们拉 `library/alpine` 是好的，这正是构建那条路能通的原因） |
+| `https://docker.fnnas.com`（飞牛默认） | ❌ 401 |
+
+所以镜像源列表里除了拉官方镜像那个，**再放一个能拉任意仓库的**（例如 `https://dockerproxy.net`）——
+Docker 会按顺序试，两类镜像各走各的。
 
 ### 数据目录的属主：不用你做
 

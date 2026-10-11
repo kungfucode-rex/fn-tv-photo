@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>图评 · 编辑评论</title>
+<!--
+  One comment, admin only (docs/tuping-design.md §17.15).
+
+  Separate from the comment page on purpose. Putting a textarea under every comment would
+  grow the guest page — which is opened by strangers, on phones, standing in front of a
+  television — by a form per comment, for a control only the admin ever sees. This page is
+  reached by tapping 编辑 on one comment, and it is the only place a comment is rewritten.
+
+  No JavaScript here either: 保存 and 删除 are both plain form POSTs that 303 back to the
+  photo page, so a refresh after either one re-runs a GET.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #6b6b74;
+    --line: #e3e3e8;
+    --card: #f6f6f8;
+    --accent: #3355cc;
+    --ok: #1f7a3d;
+    --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121215;
+      --fg: #ecedf1;
+      --muted: #a0a0ab;
+      --line: #2c2c33;
+      --card: #1b1b21;
+      --accent: #8fa8ff;
+      --ok: #6ee7a0;
+      --bad: #ff9d95;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    padding: 16px;
+    max-width: 560px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 17px; margin: 18px 0 8px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 16px; /* anything smaller and iOS zooms the field on focus */
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  textarea { min-height: 76px; resize: vertical; }
+  button {
+    margin-top: 14px;
+    width: 100%;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 16px;
+  }
+  /* 删除 is one tap away from 保存, so it is drawn as the quiet one, not as a second
+     primary button the thumb can find by accident. It is a soft delete either way
+     (api.handleCommentDelete). */
+  form.remove button {
+    color: var(--bad);
+    background: var(--card);
+    border: 1px solid var(--bad);
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    font-size: 15px;
+  }
+  .notice.ok { background: var(--card); color: var(--ok); border: 1px solid var(--ok); }
+  .notice.bad { background: var(--card); color: var(--bad); border: 1px solid var(--bad); }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 13px; margin: 22px 0 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+{{if .Notice}}<p class="notice {{.NoticeKind}}">{{.Notice}}</p>{{end}}
+
+<h1>编辑评论</h1>
+<p class="hint">原话发表于 {{.When}}。</p>
+
+<form method="post" action="/c/{{.Code}}/edit/{{.ID}}">
+  <label for="nickname">昵称</label>
+  <input id="nickname" name="nickname" type="text" maxlength="12" value="{{.Nickname}}" autocomplete="nickname">
+
+  <label for="content">内容</label>
+  <textarea id="content" name="content" maxlength="20" required>{{.Content}}</textarea>
+
+  <button type="submit">保存</button>
+</form>
+
+<form class="remove" method="post" action="/c/{{.Code}}/delete/{{.ID}}">
+  <button type="submit">删除这条评论</button>
+</form>
+
+<footer><a href="/c/{{.Code}}">回到这张照片</a></footer>
+</body>
+</html>

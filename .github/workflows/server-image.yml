@@ -1,0 +1,124 @@
+# Builds the 图评 server image for both architectures and pushes it to Docker Hub, so that a
+# deployment is one file: a compose that says `image:` and nothing else (docs/tuping-design.md
+# §17.22). It also attaches the self-build four to the same release, for deployments that cannot
+# pull anything.
+#
+#   git tag server-v0.1.0 && git push origin server-v0.1.0
+#
+# Needs two repository secrets, and nothing else:
+#
+#   DOCKERHUB_USERNAME   the Docker Hub account — it is also the image namespace, so there is no
+#                        third place to keep the name in sync
+#   DOCKERHUB_TOKEN      an access token with read/write (Account settings → Security), not the
+#                        account password
+#
+# The first push creates the repository on Docker Hub: public repositories do not have to be
+# made in advance.
+name: server image
+
+on:
+  push:
+    tags: ['server-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build and tag (for a manual run; a tag push uses the tag)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/tuping
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      # One version, worked out once. A tag push gives `server-v0.1.0` → `0.1.0`; a manual run
+      # uses its input.
+      - name: work out the version
+        id: version
+        env:
+          # Through the environment rather than interpolated into the script: a version string
+          # should never be able to become shell syntax.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          raw="$INPUT_VERSION"
+          [ -n "$raw" ] || raw="${GITHUB_REF_NAME}"
+          case "$raw" in server-v*) raw="${raw#server-v}" ;; esac
+          echo "version=$raw" >> "$GITHUB_OUTPUT"
+          echo "building $IMAGE:$raw"
+
+      # The same gate the developer runs locally: nothing ships that has not passed it.
+      - name: vet and test
+        working-directory: server
+        run: |
+          go vet ./...
+          go test ./... -count=1
+
+      # The artifact set `tools/tuping.ps1 -Tasks dist` produces, without that script: it pins a
+      # China-side module proxy and a Windows toolchain root, neither of which belongs on a
+      # GitHub runner. The go build flags must stay in step with tools/tuping.ps1.
+      - name: cross-build both architectures and lay out the release files
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            ( cd server
+              GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -trimpath \
+                -ldflags "-s -w -X main.version=$VERSION" \
+                -o "../dist/tupingd-linux-$arch" ./cmd/tupingd )
+          done
+          cp server/Dockerfile server/docker-compose.yml server/docker-compose.image.yml \
+             server/.dockerignore server/README.md dist/
+          ls -l dist
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # context: dist — the same context a deployer's `build: .` uses, so the image built here and
+      # the image built on a NAS are built from the same kind of directory.
+      - name: build and push, both architectures in one manifest
+        uses: docker/build-push-action@v6
+        with:
+          context: dist
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # No provenance attestation: it adds a third, empty platform to the manifest list, and
+          # NAS clients and registry mirrors have been seen to pick it and then fail. The two real
+          # platforms are the whole point of this image.
+          provenance: false
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE }}:latest
+
+      # Attaching the four files closes the other half of the story: a deployment that cannot
+      # reach a registry still has something to download, and `dist/` is what the README
+      # describes for a self-build.
+      - name: attach the self-build files to the release
+        if: startsWith(github.ref, 'refs/tags/server-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/tupingd-linux-amd64
+            dist/tupingd-linux-arm64
+            dist/Dockerfile
+            dist/docker-compose.yml
+            dist/docker-compose.image.yml
+            dist/.dockerignore
+            dist/README.md

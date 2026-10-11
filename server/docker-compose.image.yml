@@ -1,0 +1,57 @@
+# 图评 (tuping) —— 这一份就够了（docs/tuping-design.md §17.22）。
+#
+# 它拉取已经构建好的镜像，所以不需要 Dockerfile、不需要二进制、不需要在同一个目录里放别的东西：
+# 在飞牛「Docker 应用 → Compose → 新增项目」里把这一份粘进去，改一行口令，点「启动」即可。
+# 架构（amd64 / arm64）由镜像本身的多架构清单决定，不用你选。
+#
+# 唯一要改的一行是 TUPING_ADMIN_TOKEN。
+services:
+  tuping:
+    # 换成发布镜像的那个命名空间。镜像发布在 Docker Hub，用国内加速源可以拉。
+    image: kungfucode/tuping:0.1.0
+    container_name: tuping
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+
+    # 数据目录的属主：镜像自己会处理 —— 容器以 root 起步，二进制把 data/（含里面已有的
+    # 文件）的属主交给 uid 10001，然后立刻放弃 root（日志里一行 "running unprivileged"）。
+    # 所以这里什么都不用做；只有挂载在 SMB/CIFS 上（不支持 chown）才需要加 user: "0:0"。
+
+    volumes:
+      # 相对路径，按 compose 文件所在的目录解析：数据落在项目目录下的 data/。
+      - ./data:/data
+
+    environment:
+      # 改这一行：管理员的密码，登录 http://<这台 NAS 的地址>:8080/admin 时手打。
+      # 留空 = 没有管理员（评论页不会出现「管理员登录」）。
+      TUPING_ADMIN_TOKEN: "change-me"
+
+      # 其余都有默认值，按需取消注释：
+      #
+      # 二维码里的地址默认取"谁在连"的那个地址（电视注册照片时会把自己用的地址报上来）。
+      # 只有反向代理改写了 Host 之类的情况才需要钉死；钉错了不会报错，只会让二维码扫了打不开。
+      # TUPING_BASE_URL: "http://192.168.31.14:8080"
+      #
+      # 签名密钥第一次启动自动生成，存在数据目录的 secret 里；填了就是固定/轮换它。
+      # TUPING_SECRET: "<openssl rand -base64 32>"
+      #
+      # 要求注册照片时带共享令牌（办公室/宿舍这类不信任局域网时用）。
+      # TUPING_REGISTER_TOKEN: "<optional>"
+      #
+      # 日志时间戳的时区，镜像里已经是 Asia/Shanghai。
+      # TZ: "Asia/Shanghai"
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    logging:
+      driver: json-file
+      options:
+        # 日志是 NAS 出问题时唯一的证据，但也不能让它把磁盘写满。
+        max-size: "10m"
+        max-file: "3"

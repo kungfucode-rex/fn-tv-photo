@@ -1,0 +1,106 @@
+# 图评 (tuping) — one service, one volume, one value to edit.
+#
+# The one value is TUPING_ADMIN_TOKEN, further down: the password for the moderation
+# page. Everything else has a working default.
+#
+# The addresses are deliberately NOT configured here (docs/tuping-design.md §17.20).
+# A QR code has to carry an address a guest's PHONE can open, and the only party that
+# knows which of this server's addresses that is, is whoever just connected — a LAN
+# address, a port forward and a tunnel are all the same server. So the address comes
+# from the caller: the registering device reports the one it used, and a request that
+# arrives without one is answered with the address it arrived on.
+#
+# Set TUPING_BASE_URL only to pin a different address for callers that cannot be
+# trusted to report one (say a proxy that rewrites Host). Getting that wrong is the
+# classic failure of this deployment: the TV registers photos and shows a QR code that
+# looks fine, and every guest scans a link their phone cannot open. The server warns
+# about a pinned private address at startup and in /healthz.
+#
+#   docker compose up -d --build
+#
+services:
+  tuping:
+    build: .
+    image: tuping:latest
+    container_name: tuping
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    # Nothing here needs to be chowned by hand: the container starts as root, the binary
+    # hands the data directory to uid 10001 and then gives root up before it opens the
+    # database (§17.21). The log says "running unprivileged" when that happened, and the
+    # directory ends up owned by 10001. The one exception is a filesystem that refuses
+    # chown (SMB/CIFS): there the log says "could not take ownership", and uncommenting
+    # this line keeps the process as root instead.
+    # user: "0:0"
+
+    volumes:
+      # The database and the thumbnails. Both must outlive a rebuild.
+      - /vol1/docker/tuping/data:/data
+    environment:
+      # Optional pin for the address that goes into QR codes, for the callers whose own
+      # report cannot be believed. Behind a port forward or a tunnel this would be the
+      # PUBLIC address, `http://203.0.113.7:53347`, not a LAN one — and if you set a LAN
+      # address here while the TV is pointed at a public one, every guest gets a link
+      # their phone cannot open, with nothing wrong on the television to notice.
+      # TUPING_BASE_URL: "http://192.168.31.14:8080"
+      # The signing key behind thumbnail URLs, admin session cookies and IP
+      # hashes. LEAVE IT ALONE. With nothing here the server mints one on first
+      # start and keeps it at /data/secret, next to the database, so it survives a
+      # rebuild and travels with a backup. Setting it here is for the two cases
+      # that need a human: pinning a key you already have, and rotating one you
+      # think somebody has seen.
+      #
+      # Rotating signs out every admin and kills any live thumbnail URL. It does
+      # not touch the stored data, and it does not affect existing QR codes
+      # (those point at /c/<code>, which is not signed) or the guests' identities.
+      #
+      # openssl rand -base64 32
+      # TUPING_SECRET: "<32 random bytes, base64>"
+      #
+      # Where that file lives. Defaults to the database's directory.
+      # TUPING_SECRET_FILE: "/data/secret"
+
+      # EDIT THIS, the one value with no default: the admin password. It guards
+      # /v1/admin/*, and it is what the H5 page's 管理员登录 link asks for once it is
+      # set (docs/tuping-design.md §17.15). Whoever has it can edit and delete every
+      # comment, so use a long random string. Leave it EMPTY to have no admin at all:
+      # the login link disappears from the page and /admin answers 404, which is the
+      # honest setting for a household that does not want one.
+      TUPING_ADMIN_TOKEN: "change-me-too"
+
+      TUPING_DB: "/data/tuping.db"
+      TUPING_THUMBS: "/data/thumbs"
+
+      # Uncomment to require a shared token before a device may register photos.
+      # For an office or a dormitory LAN, where "everyone on the network" is
+      # wider than "everyone who should be able to post".
+      # TUPING_REGISTER_TOKEN: "<optional>"
+
+      # Uncomment to close device registration completely: only devices that
+      # already hold a token may register. The friendliest default is open, and
+      # this is the one switch that makes the instance private again.
+      # TUPING_OPEN_REGISTRATION: "false"
+
+      # Comma-separated additions to the two content lists. Review words send a
+      # comment to the moderation queue; reject words refuse it outright.
+      # TUPING_REVIEW_WORDS: ""
+      # TUPING_REJECT_WORDS: ""
+
+      # How long a thumbnail may go unread before the hourly sweep takes it back.
+      # TUPING_THUMB_TTL: "720h"
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+    logging:
+      driver: json-file
+      options:
+        # The log is the only evidence a NAS problem leaves, but it must not fill
+        # the volume either.
+        max-size: "10m"
+        max-file: "3"

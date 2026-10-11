@@ -40,3 +40,10 @@ reference/
 
 # Emulator / adb noise
 *.log
+
+# Cross-built tuping server binaries (tools/tuping.ps1 -Tasks dist)
+dist/
+
+# Mock review server
+tools/mock-review/node_modules/
+

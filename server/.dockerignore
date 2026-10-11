@@ -1,0 +1,27 @@
+# The build context is the compose project directory, and on the NAS that is the
+# same directory the database and the thumbnails live in: docker-compose.yml mounts
+# /vol1/docker/tuping/data into /data, and TUPING_THUMBS points at thumbs/ inside
+# it. Without this file every 构建 in the fnOS Docker panel packs the whole SQLite
+# database and thumbnail cache and ships it to the Docker daemon, so that the
+# Dockerfile can COPY one 15 MB binary. None of it can reach the image, which copies
+# exactly one file, so ignoring it only removes work.
+#
+# The two entries that matter are data/ and thumbs/; the rest is hygiene for a
+# directory a deployer also browses with the file manager.
+
+data/
+thumbs/
+*.db
+*.db-wal
+*.db-shm
+
+.git
+.gitignore
+*.log
+.env
+
+# The files the build itself reads are not context either.
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md

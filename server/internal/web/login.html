@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>图评 · 管理员</title>
+<!--
+  The admin's way in (docs/tuping-design.md §17.15).
+
+  Same rules as the guest page: no JavaScript anywhere, one plain form POST, and a 303
+  back to a GET so that "pressed the button twice" and "hit refresh" are not a second
+  login attempt. The token is compared on the server with a constant-time compare, and a
+  wrong one costs a line in the log, not an explanation of how close it was.
+
+  `next` is a hidden field rather than a URL the login page builds itself, because the
+  server has to re-check it anyway (api.safeNext): this is the page where somebody types a
+  secret, and it is the one page where a redirect must never leave this host.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #6b6b74;
+    --line: #e3e3e8;
+    --card: #f6f6f8;
+    --accent: #3355cc;
+    --ok: #1f7a3d;
+    --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121215;
+      --fg: #ecedf1;
+      --muted: #a0a0ab;
+      --line: #2c2c33;
+      --card: #1b1b21;
+      --accent: #8fa8ff;
+      --ok: #6ee7a0;
+      --bad: #ff9d95;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    padding: 16px;
+    max-width: 560px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { font-size: 17px; margin: 18px 0 8px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=password] {
+    width: 100%;
+    font: inherit;
+    font-size: 16px; /* anything smaller and iOS zooms the field on focus */
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  button {
+    margin-top: 14px;
+    width: 100%;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 16px;
+  }
+  /* 退出 is not the thing this page is for, so it is not the loudest thing on it. */
+  form.signout button {
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    font-size: 15px;
+  }
+  .notice.ok { background: var(--card); color: var(--ok); border: 1px solid var(--ok); }
+  .notice.bad { background: var(--card); color: var(--bad); border: 1px solid var(--bad); }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 13px; margin: 22px 0 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+{{if .Notice}}<p class="notice {{.NoticeKind}}">{{.Notice}}</p>{{end}}
+
+<h1>图评管理员</h1>
+
+{{if .LoggedIn}}
+<p class="hint">已经登录了。登录期间，照片页上的每条评论旁边会出现 编辑 和 删除。</p>
+{{if .Next}}<p class="hint"><a href="{{.Next}}">回到刚才那一页</a></p>{{end}}
+<form class="signout" method="post" action="/admin/logout">
+  <button type="submit">退出管理员</button>
+</form>
+{{else}}
+<p class="hint">输入部署时设置的 <code>TUPING_ADMIN_TOKEN</code>。登录后可以编辑和删除评论，匿名访客发评论不受影响。</p>
+<form method="post" action="/admin">
+  <label for="token">管理员令牌</label>
+  <input id="token" name="token" type="password" required autocomplete="current-password" autofocus>
+  <input type="hidden" name="next" value="{{.Next}}">
+  <button type="submit">登录</button>
+</form>
+{{end}}
+
+<footer>图评 · 局域网自托管</footer>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>图评</title>
+<!--
+  One page, no JavaScript at all.
+
+  The form posts to `/c/{code}` and the server answers with 303 back to the same
+  page, so "submitted twice", "hit refresh and resend", and "typed a long comment
+  and then the network died" are handled without a line of client logic. The
+  whole page is this file and no external resources, which is also why nothing
+  here is https: on a LAN the page is plain http and a single https asset would
+  be blocked as mixed content (docs/tuping-design.md §10.1).
+
+  The one thing this page has that the guest view does not is the admin's controls:
+  a bar at the top and 编辑 / 删除 under each comment, both rendered only while an
+  admin session cookie is present (§17.15). The login page and the edit form are
+  separate documents (login.html, edit.html) rather than sections of this one, so a
+  guest's copy of this page is exactly as small as it was.
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1b1b1f;
+    --muted: #6b6b74;
+    --line: #e3e3e8;
+    --card: #f6f6f8;
+    --accent: #3355cc;
+    --ok: #1f7a3d;
+    --bad: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121215;
+      --fg: #ecedf1;
+      --muted: #a0a0ab;
+      --line: #2c2c33;
+      --card: #1b1b21;
+      --accent: #8fa8ff;
+      --ok: #6ee7a0;
+      --bad: #ff9d95;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    padding: 16px;
+    max-width: 560px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  img.photo {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    background: var(--card);
+  }
+  h1 { font-size: 17px; margin: 18px 0 8px; }
+  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
+  ul.comments {
+    list-style: none;
+    margin: 22px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  ul.comments li {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  ul.comments li.mine { background: var(--card); border-radius: 8px; }
+  .who { font-weight: 600; }
+  .when { color: var(--muted); font-size: 13px; margin-left: 8px; }
+  .text { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; }
+  .empty { color: var(--muted); margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+  form { padding-top: 4px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 16px; /* anything smaller and iOS zooms the field on focus */
+    color: var(--fg);
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  textarea { min-height: 76px; resize: vertical; }
+  button {
+    margin-top: 14px;
+    width: 100%;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 10px;
+    padding: 13px 16px;
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 14px;
+    font-size: 15px;
+  }
+  .notice.ok { background: var(--card); color: var(--ok); border: 1px solid var(--ok); }
+  .notice.bad { background: var(--card); color: var(--bad); border: 1px solid var(--bad); }
+  a { color: var(--accent); }
+  /*
+    The admin's controls (§17.15). Guests never receive these elements, so none of this
+    is about them — but the page they do get is the same page, so the rules are kept
+    small and the elements are simply absent when .Admin is false. Every one of them is a
+    plain form POST: no script, no confirm dialog, and 删除 cannot be triggered by a link
+    another page points at (SameSite=Lax, api/admin.go).
+  */
+  .adminbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 8px 12px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  form.inline { display: inline; margin: 0; padding: 0; }
+  .adminbar button, .admin button, .admin a {
+    display: inline-block;
+    width: auto;
+    margin: 0;
+    padding: 5px 12px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    text-decoration: none;
+    color: var(--fg);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  ul.comments li .admin { display: flex; gap: 8px; margin-top: 8px; }
+  .admin .remove { color: var(--bad); border-color: var(--bad); }
+  footer { color: var(--muted); font-size: 13px; margin: 22px 0 8px; text-align: center; }
+</style>
+</head>
+<body>
+
+{{if .Admin}}
+<!--
+  Said out loud, because the difference between this page and the same URL for everyone
+  else is invisible: the only other sign is two small buttons under each comment.
+-->
+<div class="adminbar">
+  <span>管理员模式 · 可以编辑和删除评论</span>
+  <form class="inline" method="post" action="/admin/logout">
+    <button type="submit">退出</button>
+  </form>
+</div>
+{{end}}
+
+{{if .Notice}}<p class="notice {{.NoticeKind}}">{{.Notice}}</p>{{end}}
+
+{{if .ThumbURL}}<img class="photo" src="{{.ThumbURL}}" alt="照片" width="{{.ThumbWidth}}" height="{{.ThumbHeight}}">{{end}}
+
+<h1>评论 {{.CommentCount}}</h1>
+<p class="hint">这张照片的评论所有人都能看见。别写个人信息。</p>
+
+<!--
+  The form comes before the comments, and the order is the point: this page is opened
+  with one hand on a phone, standing in front of a television, and the thing the guest
+  came to do is write on it. A list of everything everybody else said, above the box they
+  have to type in, pushes the box off the bottom of the screen — reported as "评论信息放到
+  表单下面吧，这样方便表单填写" (docs/tuping-design.md §17.11).
+-->
+<form method="post" action="/c/{{.Code}}">
+  <label for="nickname">昵称（可留空，默认匿名）</label>
+  <input id="nickname" name="nickname" type="text" maxlength="12" value="{{.Nickname}}" autocomplete="nickname">
+
+  <label for="content">说点什么</label>
+  <textarea id="content" name="content" maxlength="20" required
+            placeholder="最多 20 个字，电视上一行显示">{{.Content}}</textarea>
+
+  <input type="hidden" name="idem" value="{{.IdemKey}}">
+  <button type="submit">提交</button>
+</form>
+
+{{if .Comments}}
+<ul class="comments">
+  {{range .Comments}}
+  <li{{if .Mine}} class="mine"{{end}}>
+    <span class="who">{{.Nickname}}</span><span class="when">{{.When}}</span>
+    <p class="text">{{.Content}}</p>
+    {{if $.Admin}}
+    <!--
+      编辑 is a link and 删除 is a form, and the asymmetry is the point: changing a
+      comment is undoable by changing it back, deleting one is a decision. A form means
+      the delete request is a POST the browser cannot be talked into by another page.
+    -->
+    <div class="admin">
+      <a href="/c/{{$.Code}}/edit/{{.ID}}">编辑</a>
+      <form class="inline" method="post" action="/c/{{$.Code}}/delete/{{.ID}}">
+        <button class="remove" type="submit">删除</button>
+      </form>
+    </div>
+    {{end}}
+  </li>
+  {{end}}
+</ul>
+{{else}}
+<p class="empty">还没有人评论过这张照片。</p>
+{{end}}
+
+<footer>
+  图评 · 局域网自托管{{if .AdminAvailable}}{{if not .Admin}} · <a href="{{.AdminLoginURL}}">管理员登录</a>{{end}}{{end}}
+</footer>
+</body>
+</html>

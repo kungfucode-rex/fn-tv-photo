@@ -440,6 +440,130 @@ category the app installs and can be started by an explicit `am start`, but no
 launcher ever shows it. On a phone the UI is still the forced-landscape, D-pad-first
 TV layout.
 
+## The 图评 (tuping) server — Docker deployment
+
+The **图评** button on the television — a QR code in the corner while a photo is being previewed; a guest
+scans it, writes a comment on their phone, and the comment floats back across the screen as danmaku —
+needs a server. It lives in [`server/`](server/README.md): one static Go binary that carries its own H5
+comment page, and all of its state is a SQLite file and a thumbnail directory under `data/`.
+
+**The only value a deployer has to fill in is the admin password**; everything else has a default. This
+section is written for somebody else — a stranger who found this repository and wants it running. The
+deeper reference (every environment variable, the signing key, how the address is chosen, building from
+source) is [`server/README.md`](server/README.md).
+
+### What you need
+
+- A machine running Docker (fnOS / Synology / QNAP / plain Linux) **on the same LAN as the television and
+  the phones**;
+- FN Photo installed on the television first (see **Install** above);
+- A free port (8080 by default) and a directory for the data.
+
+**Do not expose this port to the internet.** It is plaintext HTTP, it has no account system beyond the
+single admin password, and comments are visible to anybody who can reach it. A LAN is the boundary it was
+designed for.
+
+### One file is enough (recommended)
+
+The image is published on Docker Hub and it is **multi-architecture** — amd64 or arm64 is decided by the
+image's own manifest, so there is no binary to pick, no Dockerfile, and no pile of files to gather in one
+directory.
+
+In fnOS: **Docker app → Compose → Add project**, name it `tuping`, paste the block below, change the one
+password line, press **Start** (this path has **no build step** at all — it only pulls):
+
+```yaml
+services:
+  tuping:
+    image: kungfucode/tuping:0.1.0     # published on Docker Hub as kungfucode/tuping
+    container_name: tuping
+    restart: unless-stopped
+    ports:
+      - "8080:8080"                    # left side is the NAS port; if it is taken use 8090:8080
+    volumes:
+      - ./data:/data                   # comments, thumbnails and the signing key live here
+    environment:
+      TUPING_ADMIN_TOKEN: "change-me"  # ← the only line to change: the admin password
+```
+
+Without Compose, the same thing as one command:
+
+```sh
+docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your password' kungfucode/tuping:0.1.0
+```
+
+| Variable | What to put there |
+| --- | --- |
+| `TUPING_ADMIN_TOKEN` | the admin password, typed when logging in at `/admin`; **empty = no admin** (the 管理员登录 link never appears) |
+
+Nothing else needs filling in: `TUPING_SECRET` is minted on first start and kept in `data/`, and
+`TUPING_BASE_URL` defaults to the address whoever is asking used — which is where the QR code's address
+comes from anyway, reported by the television. The same file with every option commented lives in
+[`server/docker-compose.image.yml`](server/docker-compose.image.yml).
+
+### Three steps to know it works
+
+1. **Read the log.** Two lines have to be there — missing either one means something is wrong:
+
+   ```
+   level=INFO msg="running unprivileged" uid=10001 gid=10001
+   level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
+   ```
+
+2. **Ask the server.** `curl http://<nas>:8080/healthz` → `{"ok":true,"version":"0.1.0",...}`.
+3. **Open the admin page.** On a phone, `http://<nas>:8080/admin`, log in with the password from step 2;
+   seeing the moderation queue means everything works.
+
+Then the television: fill the **图评服务器** row with the same address (`http://192.168.31.14:8080` — one a
+*phone* can open), press **图评** while previewing a photo, and the QR code appears. A phone scans it and
+writes a comment; the comment floats across the screen.
+
+### When something goes wrong
+
+| Symptom | What it is, and what to do |
+| --- | --- |
+| Pulling is slow or fails with `401`, `403` or `connection reset` | The NAS's registry mirror. **Some mirrors carry official images only**: `docker.1panel.live` and `docker.xuanyuan.me` serve `library/alpine` but answer `403` for this image. Verified to serve it: `https://dockerproxy.net`, `https://hub.1panel.dev`. Keep one of each in **Docker app → Images → registry settings**, then **stop and start the Docker service** and start the project again. |
+| The container restarts forever, log says `unable to open database file` | The data directory's owner and the container's uid disagree. The image handles that itself (starts as root, takes ownership of `data/`, drops to uid 10001), so this should not happen; only on a mount that refuses `chown` (SMB/CIFS) do you add `user: "0:0"` to the service. |
+| `port is already allocated` | 8080 is taken by another container: change the left side of `"8080:8080"` (say `"8090:8080"`) and use that port everywhere, including the television. |
+| The QR code scans into nothing | The address inside it is the one the television reported: check that the address in the television's own row is one the *phone* can open (same LAN, right port), then register the photo again from the television. |
+
+### Upgrading, backing up, removing
+
+- **Upgrade**: change `0.1.0` in the compose file to the new version and press **Start** (or "redeploy") —
+  that is the only button that recreates the container on the new image. "Restart" alone does not.
+- **Backup**: three things in `data/` — `tuping.db` (the comments), `thumbs/` (thumbnails) and `secret`
+  (the signing key). The first two are what a backup needs; losing `secret` only costs the admin one more
+  login.
+- **Remove**: stop the project and delete the container; delete the `data/` directory too if the comments
+  should go with it.
+
+### Building the image yourself (offline, or after a code change)
+
+If the NAS cannot reach Docker Hub, or you want to change the Dockerfile or the code, build the image on
+the NAS instead: four files in **one directory**, then **Build** and **Start** in the panel (from
+`dist/`, or from the release attachments):
+
+```powershell
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.0
+```
+
+```
+docker-compose.yml    Dockerfile    tupingd-linux-amd64    (.dockerignore optional)
+```
+
+Pick the binary for the architecture — `uname -m`: `x86_64` means amd64, `aarch64` means arm64 — and do
+**not** rename it any more: the Dockerfile takes the file BuildKit names for the target platform. The two
+traps on this path: the build needs a registry too (`FROM alpine:3.20`, see the mirror row above), and
+**a new binary needs Build and then Start again**.
+
+The image is built and pushed by [`.github/workflows/server-image.yml`](.github/workflows/server-image.yml)
+on a `server-v*` tag: both architectures go into one manifest, and the self-build files are attached to the
+same release.
+
+The full environment-variable table, the address and signing-key rules, and the design decisions behind
+them are in [`server/README.md`](server/README.md) and [`docs/tuping-design.md`](docs/tuping-design.md).
+
 ## Project layout
 
 ```

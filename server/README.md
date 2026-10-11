@@ -8,6 +8,11 @@
 
 ## 部署
 
+**给不想读长文的人**：在 Docker（飞牛/群晖/威联通/任何 Linux）上跑一个容器，把 8080 端口和 `data/`
+目录给它，环境变量里只填一个管理员口令；跑起来之后手机打开 `/admin` 能登录、电视上填同一个地址就能用。
+**这个端口不要映射到公网** —— 它没有账号体系（只有一个管理员口令）、走明文 HTTP、评论对所有能连到它的
+人可见，局域网就是它设计的边界。
+
 ### 一行部署（推荐）
 
 镜像发布在 Docker Hub 上，而且是**多架构**的：amd64 还是 arm64 由镜像自己的清单决定，你不用选、不用
@@ -19,15 +24,22 @@
 ```yaml
 services:
   tuping:
-    image: kungfucode/tuping:0.1.0     # 换成发布镜像的命名空间
+    image: kungfucode/tuping:0.1.0     # 发布在 Docker Hub 的 kungfucode/tuping
     container_name: tuping
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080:8080"                    # 左边是 NAS 上的端口；被占用就改成 8090:8080 之类
     volumes:
-      - ./data:/data
+      - ./data:/data                   # 评论、缩略图、签名密钥都落在这里
     environment:
       TUPING_ADMIN_TOKEN: "change-me"  # ← 唯一要改的一行
+```
+
+没有 Compose 的地方，等价的一条命令：
+
+```sh
+docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.0
 ```
 
 | 变量 | 填什么 |
@@ -39,7 +51,7 @@ services:
 
 点**启动**即可 —— 这一条路**没有「构建」这一步**，它只是把镜像拉下来。
 
-起来之后：
+起来之后（日志里应该先有一行 `running unprivileged uid=10001 gid=10001`，然后是 `tupingd listening`）：
 
 ```sh
 curl http://192.168.31.14:8080/healthz
@@ -80,12 +92,18 @@ Docker 会按顺序试，两类镜像各走各的。
 
 唯一需要你动手的例外：**挂载的是 SMB/CIFS 这类不支持 `chown` 的文件系统**。那时日志里会出现 `could not take ownership ... staying root`，给 compose 的服务加一行 `user: "0:0"` 即可（进程一直以 root 运行，功能不受影响）。
 
-### 升级
+### 升级、备份、卸载
 
-镜像的 tag 就是版本：把 compose 里的 `0.1.0` 换成新的，再点「启动 / 重新部署」。
+**升级**：镜像的 tag 就是版本 —— 把 compose 里的 `0.1.0` 换成新的，再点「启动 / 重新部署」。
 
 **只有「启动 / 重新部署」会换掉正在跑的容器**（它等于 `docker compose up -d`）：只点「重启」不会换镜像，
 只点「构建」只重做镜像。更新后以为"新代码没生效"，几乎都是这一步。
+
+**备份**：`data/` 里的三样东西 —— `tuping.db`（评论）、`thumbs/`（缩略图）、`secret`（签名密钥）。
+前两个是必须的（见下面的**备份**一节），`secret` 丢了只是让管理员重新登录一次。
+
+**卸载**：停掉项目、删掉容器即可；想连评论一起清掉就删 `data/` 目录。这个服务不在别处留任何东西 ——
+没有外发请求、没有账号、没有云。
 
 ---
 

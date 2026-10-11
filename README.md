@@ -142,6 +142,117 @@ debug 构建用 `tools/build.ps1 -Tasks assembleDebug` 并安装 `app-debug.apk`
 
 同一个 APK 也能装在手机上，带一个普通的桌面图标。`MainActivity` 既为 Android TV 主屏声明了 `LEANBACK_LAUNCHER`，也声明了手机启动器会枚举的普通 `LAUNCHER` category，并且 `android.software.leanback` 是 `required="false"`，所以 APK 不会被手机过滤掉。没有 `LAUNCHER` category 时，应用能装上、也能用显式 `am start` 启动，但任何启动器都不会显示它。在手机上，界面仍是强制横屏、以方向键为先的电视布局。
 
+## 图评服务端（Docker 部署）
+
+电视上那个「图评」按钮 —— 预览照片时角落出现二维码，客人扫码在手机上写评论，评论以弹幕飘回电视 ——
+需要一个服务端。它在 [`server/`](server/README.md)：一个静态 Go 二进制，自带 H5 评论页，全部状态就是
+`data/` 里的一个 SQLite 文件和一个缩略图目录。
+
+**部署者唯一需要填的值是管理员口令**，其余都有默认值。这一节写给"别人"：一个陌生人从 release 或这个
+README 出发，照下面做就能跑起来。更细的说明（环境变量全表、签名密钥、地址规则、从源码构建）在
+[`server/README.md`](server/README.md)。
+
+### 需要什么
+
+- 一台跑 Docker 的机器（飞牛 / 群晖 / 威联通 / 任何 Linux），**和电视、手机在同一个局域网里**；
+- 电视上先装好 FN Photo（见上面的**安装**）；
+- 一个空闲端口（默认 8080）和一个目录（放数据）。
+
+**这个端口不要映射到公网。** 它是明文 HTTP、除了一个管理员口令没有账号体系、评论对所有能连到它的人可见。
+局域网是它的设计边界。
+
+### 一份文件就够（推荐）
+
+镜像发布在 Docker Hub，而且是**多架构**的：amd64 还是 arm64 由镜像自己的清单决定 —— 不用挑二进制、不用管
+Dockerfile、也不用在同一个目录里凑文件。
+
+飞牛 **Docker 应用 → Compose → 新增项目**：项目名 `tuping`，把下面这段粘进去，改一行口令，点**启动**
+（这条路**没有「构建」**，只是把镜像拉下来）：
+
+```yaml
+services:
+  tuping:
+    image: kungfucode/tuping:0.1.0     # 发布镜像，Docker Hub 上的 kungfucode/tuping
+    container_name: tuping
+    restart: unless-stopped
+    ports:
+      - "8080:8080"                    # 左边是 NAS 上的端口；被占用就改成别的，例如 8090:8080
+    volumes:
+      - ./data:/data                   # 评论、缩略图、签名密钥都在这个目录里
+    environment:
+      TUPING_ADMIN_TOKEN: "change-me"  # ← 唯一要改的一行：管理员口令
+```
+
+没有 Compose 的场合，等价的一条命令：
+
+```sh
+docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.0
+```
+
+| 变量 | 填什么 |
+| --- | --- |
+| `TUPING_ADMIN_TOKEN` | 管理员的口令，登录 `/admin` 时手打；**留空 = 没有管理员**（页面上不会出现「管理员登录」） |
+
+其余都有默认，不用管：`TUPING_SECRET`（签名密钥）第一次启动自己生成并存进 `data/`；`TUPING_BASE_URL`
+（二维码里的地址）默认取"谁在连"的那个地址 —— 二维码里的地址本来就是电视注册照片时上报的那个。
+带全部注释的同一份在 [`server/docker-compose.image.yml`](server/docker-compose.image.yml)。
+
+### 三步验收
+
+1. **看日志**：容器起来后，日志里应该有这两行 —— 少了任何一行都是出问题了：
+
+   ```
+   level=INFO msg="running unprivileged" uid=10001 gid=10001
+   level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
+   ```
+
+2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.0",...}`。
+3. **进管理页**：手机打开 `http://<NAS 地址>:8080/admin`，用第 2 步那个口令登录，能看到审核队列就好。
+
+然后电视：设置里「图评服务器」填**同一个地址**（`http://192.168.31.14:8080` 这种，手机也得能打开它），
+预览一张照片时按「图评」→ 二维码出现 → 手机扫码写评论 → 电视上弹幕飘过。
+
+### 出问题时
+
+| 症状 | 是什么 / 怎么办 |
+| --- | --- |
+| 拉镜像慢、失败，看到 `401`、`403` 或 `connection reset` | NAS 的镜像源问题。**有些加速源只镜像官方镜像**：`docker.1panel.live`、`docker.xuanyuan.me` 拉 `library/alpine` 没问题，拉本镜像会回 `403`。实测能拉本镜像的有 `https://dockerproxy.net`、`https://hub.1panel.dev`。在 Docker 应用的**镜像 → 仓库设置**里两类各放一个，然后**把 Docker 服务停止再启动**，再启动项目。 |
+| 容器反复重启，日志 `unable to open database file` | 数据目录的属主和容器里的 uid 对不上。镜像自己会处理（以 root 起步、接管 `data/` 属主、随即降为 uid 10001），所以正常情况下不会出现；只有挂载在 SMB/CIFS 这类不支持 `chown` 的地方，才需要给服务加一行 `user: "0:0"`。 |
+| 起不来，`port is already allocated` | 8080 被别的容器占了：把 `"8080:8080"` 左边改掉（例如 `"8090:8080"`），电视和手机上用的地址也要跟着带端口。 |
+| 二维码扫了打不开 | 二维码里的地址是电视上报的：先在电视上确认那行地址**手机也能打开**（同局域网、端口对得上），然后在电视上重新注册这张照片。 |
+
+### 升级 / 备份 / 卸载
+
+- **升级**：把 compose 里的 `0.1.0` 换成新版本，点「启动 / 重新部署」—— 只有这一步会用新镜像重建容器，
+  只点「重启」不会换镜像。
+- **备份**：`data/` 里三样东西 —— `tuping.db`（评论）、`thumbs/`（缩略图）、`secret`（签名密钥）。
+  前两个必须备；`secret` 丢了只是让管理员重新登录一次。
+- **卸载**：停掉项目、删掉容器；想连评论一起清掉就删 `data/` 目录。
+
+### 自己构建镜像（离线，或者改了代码）
+
+NAS 出不了外网、或者你想改 Dockerfile / 改代码，就走这一条：镜像在 NAS 上构建。四个文件放进**同一层**
+目录，在面板里点「构建 → 启动」（[`dist/`](server/README.md) 里或 release 附件里）：
+
+```powershell
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.0
+```
+
+```
+docker-compose.yml    Dockerfile    tupingd-linux-amd64    （.dockerignore 可选）
+```
+
+二进制按架构选：`uname -m` 是 `x86_64` 用 amd64，`aarch64` 用 arm64（不用改名，Dockerfile 按 BuildKit
+给的目标平台取文件）。这条路的两个坑：构建同样要拉 registry（`FROM alpine:3.20`，见上表的镜像源那行），
+以及**换了二进制必须重新点「构建」再点「启动」**。
+
+镜像由 [`.github/workflows/server-image.yml`](.github/workflows/server-image.yml) 在 `server-v*` tag 上构建，
+两种架构打进同一个 manifest 并推到 Docker Hub，同时把自建用的那几个文件附到 release 上。
+
+环境变量全表、签名密钥与地址规则、以及这些决定背后的取舍，在
+[`server/README.md`](server/README.md) 与 [`docs/tuping-design.md`](docs/tuping-design.md)。
+
 ## 项目结构
 
 ```

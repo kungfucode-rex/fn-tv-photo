@@ -122,44 +122,87 @@ func mint(path string) (string, error) {
 		return "", err
 	}
 
-	err = writeNew(path, value)
-	if err == nil {
-		return value, nil
-	}
-	if !errors.Is(err, fs.ErrExist) {
-		// Actionable on purpose: this is the one failure a deployer can hit
-		// without touching their configuration, so the message names both ways
-		// out.
-		return "", fmt.Errorf(
-			"create signing key %s: %w (set TUPING_SECRET to supply one, or point TUPING_SECRET_FILE at a writable directory)",
-			path, err,
-		)
-	}
+	// Two attempts at most: the second exists only for the file that holds nothing usable,
+	// which after writeNew below can only be something outside this program truncating it.
+	for attempt := 0; attempt < 2; attempt++ {
+		err := writeNew(path, value)
+		if err == nil {
+			return value, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			// Actionable on purpose: this is the one failure a deployer can hit without
+			// touching their configuration, so the message names both ways out.
+			return "", fmt.Errorf(
+				"create signing key %s: %w (set TUPING_SECRET to supply one, or point TUPING_SECRET_FILE at a writable directory)",
+				path, err,
+			)
+		}
 
-	// Someone got there first. Use theirs unless it is the empty file a crash
-	// between create and write would leave behind.
-	existing, readErr := read(path)
-	if readErr == nil && existing != "" {
-		return existing, nil
+		existing, readErr := read(path)
+		if readErr == nil && existing != "" {
+			return existing, nil
+		}
+		if readErr != nil && !errors.Is(readErr, fs.ErrNotExist) {
+			return "", fmt.Errorf("read signing key %s: %w", path, readErr)
+		}
+		if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("replace unusable signing key %s: %w", path, err)
+		}
 	}
-	if err := os.Remove(path); err != nil {
-		return "", fmt.Errorf("replace unusable signing key %s: %w", path, err)
-	}
-	if err := writeNew(path, value); err != nil {
-		return "", fmt.Errorf("create signing key %s: %w", path, err)
-	}
-	return value, nil
+	return "", fmt.Errorf("create signing key %s: the name never became available", path)
 }
 
-// writeNew creates [path] with O_EXCL so that a concurrent start cannot be
-// overwritten, and fsyncs it so that a power cut leaves either nothing or a
-// whole key.
+// writeNew puts [value] at [path] without ever exposing a half-written file.
+//
+// The value is written to a temporary file first and then hard-linked into place: link() fails
+// when the name already exists, so two starts racing settle it atomically -- and, just as
+// importantly, the loser reads a file that is already complete. Creating the file with O_EXCL
+// and then writing to it looks equivalent and is not: it publishes an *empty* file, so the loser
+// sees nothing usable, deletes the winner's key and installs its own, and the two processes run
+// with different signing keys. That is the bug TestConcurrentStartsAgreeOnOneKey caught, in CI,
+// on a kernel where eight starts actually overlap (Linux; the author's machine is Windows).
 func writeNew(path, value string) error {
-	if dir := filepath.Dir(path); dir != "" && dir != "." {
+	dir := filepath.Dir(path)
+	if dir != "." {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
 	}
+
+	// CreateTemp makes the file 0600, and a hard link shares that inode, so the key keeps its
+	// mode without a second chmod.
+	tmp, err := os.CreateTemp(dir, "."+FileName+"-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.WriteString(value + "\n"); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Link(tmp.Name(), path); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return err
+		}
+		// Hard links are not universal -- an SMB or CIFS share refuses them. Fall back to
+		// O_EXCL, which still never overwrites a key; only the empty-file window comes back,
+		// and a share that cannot link is usually one container anyway.
+		return createExclusive(path, value)
+	}
+	return nil
+}
+
+// createExclusive is the O_EXCL fallback for filesystems without hard links.
+func createExclusive(path, value string) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return err

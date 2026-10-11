@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"io"
 	"log/slog"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
@@ -1161,18 +1162,43 @@ func TestExpiredThumbnailIsNotFound(t *testing.T) {
 
 // photoFixture returns a real photograph from the mock NAS set, re-encoded so the
 // test does not depend on the exact bytes of an asset.
+//
+// The generated fallback matters more than it looks. `tools/mock-nas/assets/photos/` is
+// gitignored -- those are photographs from a real NAS -- so CI always takes this path, and the
+// fallback therefore has to depend on [id]. The first version did not: every id produced the
+// same bytes, the server correctly matched them as one photograph, and
+// TestAdminEditCannotReachAnotherPhoto quietly lost its subject (two codes pointing at the same
+// photo, so "edit through the wrong code" was no longer wrong). The first CI run failed on
+// exactly that, on 2026-10-11.
 func photoFixture(t *testing.T, id int) []byte {
 	t.Helper()
 	path := filepath.Join("..", "..", "..", "tools", "mock-nas", "assets", "photos",
 		fmt.Sprintf("%d", id), "m.jpg")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		// A generated fallback keeps the API tests runnable without the assets,
-		// but it is deliberately noisy so it still exercises the matcher.
+		// A gradient whose phase depends on id, plus seeded blocks: structured enough for a
+		// stable pHash, and far enough apart between ids that the matcher sees two different
+		// photographs rather than one re-encoded twice.
 		img := image.NewRGBA(image.Rect(0, 0, 640, 360))
 		for y := 0; y < 360; y++ {
 			for x := 0; x < 640; x++ {
-				img.Set(x, y, color.RGBA{uint8(x % 256), uint8((y * 3) % 256), uint8((x + y) % 256), 255})
+				img.Set(x, y, color.RGBA{
+					uint8((x + id*37) % 256),
+					uint8((y*3 + id*11) % 256),
+					uint8((x + y + id*23) % 256),
+					255,
+				})
+			}
+		}
+		blocks := rand.New(rand.NewSource(int64(id)))
+		for i := 0; i < 48; i++ {
+			x0, y0 := blocks.Intn(600), blocks.Intn(320)
+			w, h := 24+blocks.Intn(64), 24+blocks.Intn(48)
+			shade := uint8(blocks.Intn(256))
+			for y := y0; y < y0+h && y < 360; y++ {
+				for x := x0; x < x0+w && x < 640; x++ {
+					img.Set(x, y, color.RGBA{shade, shade, shade, 255})
+				}
 			}
 		}
 		var buf bytes.Buffer

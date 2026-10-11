@@ -125,7 +125,8 @@ func TestUnreadableKeyFileIsAnError(t *testing.T) {
 // Two containers starting against the same data directory must end up with one
 // key, not two.
 func TestConcurrentStartsAgreeOnOneKey(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "secret")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "secret")
 
 	const starts = 8
 	values := make([]string, starts)
@@ -148,6 +149,20 @@ func TestConcurrentStartsAgreeOnOneKey(t *testing.T) {
 		if v != values[0] {
 			t.Fatalf("start %d got %q, start 0 got %q", i, v, values[0])
 		}
+	}
+
+	// And nothing else was left in the directory: the write goes through a temporary file
+	// that has to be cleaned up, in the winning start and in the seven that lost.
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "secret" {
+		names := make([]string, 0, len(entries))
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("directory holds %v, want exactly [secret]", names)
 	}
 }
 

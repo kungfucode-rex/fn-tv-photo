@@ -107,9 +107,14 @@ jobs:
             ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE }}:latest
 
-      # Attaching the four files closes the other half of the story: a deployment that cannot
+      # Attaching the self-build files closes the other half of the story: a deployment that cannot
       # reach a registry still has something to download, and `dist/` is what the README
       # describes for a self-build.
+      #
+      # .dockerignore is deliberately NOT here: GitHub renames a leading-dot asset
+      # (`.dockerignore` went up as `default.dockerignore`, 2026-10-11), and a file the deployer
+      # has to rename is worse than one they can leave out — the build works without it, it only
+      # keeps data/ out of the build context. It stays in dist/ for anyone building from a clone.
       - name: attach the self-build files to the release
         if: startsWith(github.ref, 'refs/tags/server-v')
         uses: softprops/action-gh-release@v2
@@ -120,5 +125,4 @@ jobs:
             dist/Dockerfile
             dist/docker-compose.yml
             dist/docker-compose.image.yml
-            dist/.dockerignore
             dist/README.md

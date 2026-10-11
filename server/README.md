@@ -83,12 +83,13 @@ NAS 出不了外网、或者你想改 Dockerfile / 改代码，就走这一条�
 ```
 docker-compose.yml      ← 这一份里是 build: .
 Dockerfile
-.dockerignore
 tupingd-linux-amd64     ← 按架构选：x86_64 用 amd64，aarch64 用 arm64（不用改名）
+.dockerignore           ← 可选：让构建不再把 data/ 打包给 daemon
 ```
 
-四个必须和 compose 放在**同一层**（Dockerfile 里是 `COPY tupingd-linux-${TARGETARCH}`，BuildKit 按目标平台取，
-传对架构那一个就行）：
+前三个必须和 compose 放在**同一层**（Dockerfile 里是 `COPY tupingd-linux-${TARGETARCH}`，BuildKit 按目标平台取，
+传对架构那一个就行）。`.dockerignore` 是可选的 —— 没有它构建照样成功，只是 `data/` 会被一起打包给 daemon；
+release 附件里没有它（GitHub 会把点开头的附件改名成 `default.dockerignore`），需要的话从 `dist/` 里拿。
 
 ```
 /vol1/docker/tuping/

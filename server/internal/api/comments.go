@@ -120,6 +120,9 @@ func (s *Server) handleCommentCreate(w http.ResponseWriter, r *http.Request) {
 	ip := s.hmacIP(clientIP(r))
 
 	allowed, key, err := s.store.AllowAll(r.Context(),
+		// The endpoint's own budget first, so a refusal that is the whole service's is not
+		// also charged to a caller who did nothing to cause it.
+		store.RateLimit{Key: "cmt-service:min", Limit: store.LimitPerService.Limit, Window: store.LimitPerService.Window},
 		store.RateLimit{Key: "cmt-anon:" + anon + ":min", Limit: store.LimitPerAnon.Limit, Window: store.LimitPerAnon.Window},
 		store.RateLimit{Key: "cmt-anon:" + anon + ":day", Limit: store.LimitPerAnonDay.Limit, Window: store.LimitPerAnonDay.Window},
 		store.RateLimit{Key: "cmt-ip:" + ip + ":min", Limit: store.LimitPerIP.Limit, Window: store.LimitPerIP.Window},

@@ -167,6 +167,10 @@ func (s *Server) handlePageSubmit(w http.ResponseWriter, r *http.Request) {
 	ip := s.hmacIP(clientIP(r))
 
 	allowed, _, err := s.store.AllowAll(r.Context(),
+		// The same endpoint's own budget as `handleCommentCreate` asks for, under the same
+		// key: the H5 form and the JSON API create the same thing, so a ceiling that counted
+		// only one of them would be a ceiling on half a service.
+		store.RateLimit{Key: "cmt-service:min", Limit: store.LimitPerService.Limit, Window: store.LimitPerService.Window},
 		store.RateLimit{Key: "cmt-anon:" + anon + ":min", Limit: store.LimitPerAnon.Limit, Window: store.LimitPerAnon.Window},
 		store.RateLimit{Key: "cmt-anon:" + anon + ":day", Limit: store.LimitPerAnonDay.Limit, Window: store.LimitPerAnonDay.Window},
 		store.RateLimit{Key: "cmt-ip:" + ip + ":min", Limit: store.LimitPerIP.Limit, Window: store.LimitPerIP.Window},

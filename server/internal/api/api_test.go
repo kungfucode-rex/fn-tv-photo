@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -487,6 +488,67 @@ func TestCommentScreeningAndRateLimit(t *testing.T) {
 	if !limited {
 		t.Error("eight comments in a minute were all accepted; the budget is five")
 	}
+}
+
+// The comment endpoint has a budget of its own, and this is the only shape in which it
+// can be seen: every caller inside every one of its own budgets, and the endpoint full
+// anyway.
+//
+// One address runs out of its 30/min long before the service reaches 120, which is why
+// the test dials from five — 127.0.0.1 through 127.0.0.5, all loopback, so this stays on
+// one machine. Every request also arrives as a *new* guest (`anonId`), so no per-guest
+// budget is anywhere near its 5/min either. What is left is the ceiling the deployment
+// itself carries, and the count it stops at is the number in the design doc.
+func TestCommentBudgetIsWholeService(t *testing.T) {
+	h := newHarness(t)
+	deviceID, deviceToken, ownerToken := h.issueDevice("TV")
+	registered := h.registerPhoto(deviceID, deviceToken, ownerToken, "1", photoFixture(t, 41), "")
+
+	callers := make([]*http.Client, 0, 5)
+	for i := 0; i < 5; i++ {
+		callers = append(callers, callerFrom(t, fmt.Sprintf("127.0.0.%d", i+1)))
+	}
+
+	limit := store.LimitPerService.Limit
+	accepted, refused := 0, 0
+	for i := 0; i < limit+2; i++ {
+		body, _ := json.Marshal(map[string]string{
+			"code": registered.Code, "content": fmt.Sprintf("第 %d 条评论", i),
+			"nickname": "n", "idemKey": fmt.Sprintf("svc-%d", i),
+			"anonId": fmt.Sprintf("guest-%d", i), "client": "h5/1",
+		})
+		resp := h.doWith(
+			callers[i%len(callers)],
+			http.MethodPost, "/v1/comments", bytes.NewReader(body),
+			map[string]string{"Content-Type": "application/json"},
+		)
+		switch resp.StatusCode {
+		case http.StatusOK:
+			accepted++
+		case http.StatusTooManyRequests:
+			refused++
+		default:
+			status, detail := resp.StatusCode, readAll(resp.Body)
+			resp.Body.Close()
+			t.Fatalf("comment %d: %d %s", i, status, detail)
+		}
+		resp.Body.Close()
+	}
+
+	if accepted != limit {
+		t.Errorf("the endpoint took %d comments, want exactly %d", accepted, limit)
+	}
+	if refused == 0 {
+		t.Errorf("%d comments in a minute were all accepted; the endpoint has no budget of its own", limit+2)
+	}
+}
+
+// callerFrom is an HTTP client that dials from one loopback address, so one test can be
+// several callers with several per-IP budgets without leaving the machine.
+func callerFrom(t *testing.T, ip string) *http.Client {
+	t.Helper()
+	dialer := &net.Dialer{LocalAddr: &net.TCPAddr{IP: net.ParseIP(ip)}}
+	return &http.Client{Transport: &http.Transport{DialContext: dialer.DialContext}}
 }
 
 func TestLockedPhotoRefusesComments(t *testing.T) {

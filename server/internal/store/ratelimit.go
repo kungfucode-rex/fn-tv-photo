@@ -20,6 +20,18 @@ var (
 	LimitPerIP      = RateLimit{Limit: 30, Window: time.Minute}
 	LimitPerPhoto   = RateLimit{Limit: 200, Window: time.Hour}
 	LimitPerDevice  = RateLimit{Limit: 300, Window: time.Hour}
+
+	// LimitPerService is the comment endpoint's own budget, shared by every caller.
+	//
+	// Every budget above is per caller or per photo, and each of them can be escaped by
+	// arriving as somebody new: another guest cookie, another address, another picture.
+	// This one cannot, which is the whole of why it exists — "the comment endpoint accepts
+	// at most 120 a minute" is a statement about the deployment rather than about one
+	// visitor, and a public deployment is where that matters. It is deliberately the
+	// loosest of the limits, because it is also the only one that can refuse a caller who
+	// has done nothing wrong: 2 a second across everybody is more than a household or a
+	// party will produce, and the per-caller budgets are what catch the single flooder.
+	LimitPerService = RateLimit{Limit: 120, Window: time.Minute}
 )
 
 // Allow consumes one unit of a budget and reports whether it was there.

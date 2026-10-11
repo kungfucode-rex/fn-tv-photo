@@ -117,15 +117,21 @@ func (r *certReloader) GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, e
 }
 
 // load reads and parses the pair. The environment variable names are in the error because that
-// is what the person reading the log has in front of them, not the path they already typed.
+// is what the person reading the log has in front of them, not the path they already typed, and
+// so is the way out: this failure stops the container (deliberately — see the type comment), and
+// the operator meets it as a restart loop in a NAS panel with no shell open.
 func (r *certReloader) load() (*tls.Certificate, []byte, []byte, error) {
 	certPEM, err := os.ReadFile(r.certPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%s: %w", tlsCertEnv, err)
+		return nil, nil, nil, fmt.Errorf(
+			"%s: %w (mount the certificate at that path, readable by uid 10001, or unset %s and %s to serve plain http)",
+			tlsCertEnv, err, tlsCertEnv, tlsKeyEnv)
 	}
 	keyPEM, err := os.ReadFile(r.keyPath)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%s: %w", tlsKeyEnv, err)
+		return nil, nil, nil, fmt.Errorf(
+			"%s: %w (mount the private key at that path, readable by uid 10001, or unset %s and %s to serve plain http)",
+			tlsKeyEnv, err, tlsCertEnv, tlsKeyEnv)
 	}
 	pair, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {

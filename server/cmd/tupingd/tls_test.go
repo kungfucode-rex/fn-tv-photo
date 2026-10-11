@@ -112,26 +112,43 @@ func TestCertReloaderServesAndPicksUpAReplacement(t *testing.T) {
 
 // TestNewCertReloaderFailsAtStartup: a bad path or two files that are not a pair has to stop
 // the process where the deployer is reading the log, not at somebody's first scan in another
-// room.
+// room — and it has to say what to do about it, because this is a restart loop in a NAS panel
+// rather than a shell somebody can experiment in.
 func TestNewCertReloaderFailsAtStartup(t *testing.T) {
 	dir := t.TempDir()
 
-	if _, err := newCertReloader(filepath.Join(dir, "missing.pem"), filepath.Join(dir, "missing.key"), discardLogger()); err == nil {
+	_, err := newCertReloader(filepath.Join(dir, "missing.pem"), filepath.Join(dir, "missing.key"), discardLogger())
+	if err == nil {
 		t.Error("a missing certificate file did not stop the server")
-	} else if !strings.Contains(err.Error(), tlsCertEnv) {
-		t.Errorf("error %q does not name %s", err, tlsCertEnv)
+	} else {
+		if !strings.Contains(err.Error(), tlsCertEnv) {
+			t.Errorf("error %q does not name %s", err, tlsCertEnv)
+		}
+		// Both ways out, in the line the operator actually sees: mount it, or turn TLS off.
+		if !strings.Contains(err.Error(), "mount") || !strings.Contains(err.Error(), tlsKeyEnv) {
+			t.Errorf("error %q does not say how to get out of the restart loop", err)
+		}
 	}
 
+	// The key half carries the same hint, and it is the one a deployer meets when they mounted
+	// the certificate chain and forgot the private key.
 	certPath := filepath.Join(dir, "one.pem")
 	otherKey := filepath.Join(dir, "other.key")
 	writeSelfSigned(t, certPath, filepath.Join(dir, "one.key"), "one.example")
 	writeSelfSigned(t, filepath.Join(dir, "two.pem"), otherKey, "two.example")
 
-	_, err := newCertReloader(certPath, otherKey, discardLogger())
-	if err == nil {
-		t.Fatal("a certificate and a key that do not belong together were accepted")
+	err = nil
+	if _, err = newCertReloader(certPath, filepath.Join(dir, "absent.key"), discardLogger()); err == nil {
+		t.Error("a missing private key did not stop the server")
+	} else {
+		if !strings.Contains(err.Error(), tlsKeyEnv) || !strings.Contains(err.Error(), "mount") {
+			t.Errorf("error %q does not name the key and the way out", err)
+		}
 	}
-	if !strings.Contains(err.Error(), "pair") {
+
+	if _, err := newCertReloader(certPath, otherKey, discardLogger()); err == nil {
+		t.Fatal("a certificate and a key that do not belong together were accepted")
+	} else if !strings.Contains(err.Error(), "pair") {
 		t.Errorf("error %q does not say the two files are not a pair", err)
 	}
 }

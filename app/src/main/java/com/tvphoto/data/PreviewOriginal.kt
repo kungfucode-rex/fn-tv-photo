@@ -37,11 +37,22 @@ enum class PreviewOriginal(val id: String) {
      * [slideshowRunning] is passed in rather than read from anywhere, so this stays a
      * property of the setting and not of the viewer: the same setting asked twice
      * during one slideshow answers the same way.
+     *
+     * [originalCached] is the one fact that can override the setting. An original that is
+     * already on disk costs no wait at all, and the wait is the whole reason
+     * [SLIDESHOW_ONLY] prefers the thumbnail while somebody flicks through photos by hand —
+     * so those two cases answer "the original", free of charge.
+     *
+     * It deliberately does **not** override [NEVER]. That option names what is *drawn*
+     * ("所有预览都是大缩略图"), not what may be fetched, and it doubles as the escape hatch for
+     * a box that cannot afford a multi-megapixel decode: quietly handing such a television a
+     * 12-megapixel JPEG because one happened to be in the cache would be exactly the kind of
+     * surprise this setting exists to prevent.
      */
-    fun wantsOriginal(slideshowRunning: Boolean): Boolean = when (this) {
+    fun wantsOriginal(slideshowRunning: Boolean, originalCached: Boolean = false): Boolean = when (this) {
         ALWAYS -> true
         NEVER -> false
-        SLIDESHOW_ONLY -> slideshowRunning
+        SLIDESHOW_ONLY -> slideshowRunning || originalCached
     }
 
     companion object {

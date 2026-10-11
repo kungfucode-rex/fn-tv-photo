@@ -1,3 +1,8 @@
+> **本稿已作废（2026-10-09）。** 按它发的新帖被拦，原因是「主题重复」——
+> 同一个 App 在版里只该有一个主题。改为**直接覆盖 1.2 那帖**，要发的内容见
+> [forum-post-fnnas.md](forum-post-fnnas.md)（简短版）。这份长稿留作历史，
+> 里面的核对记录和配图说明仍可用。
+
 # FN Photo 1.3.7 —— 现在能在电视上自己检测升级了，安装包也从 66 MB 瘦到 26 MB
 
 昨天发过一个 1.2，这中间又改了八版。这次开新帖，把 1.2 之后的东西一次说清楚，主要是两件：**应用能在电视上自己检测并升级**，以及**安装包小了 40 MB**。
@@ -61,8 +66,8 @@
 
 **附件里的 APK 就是最新版，直接下附件最省事**（25.6 MiB）。也可以从发布页下：
 
-- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kung fu code/fn-tv-photo/releases/latest`
-- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo/releases/latest`
+- Gitee（国内快，应用内升级也用这个）：`https://gitee.com/kung fu code/fn-tv-photo/releases/latest` (网址需去掉空格)
+- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo/releases/latest` (网址需去掉空格)
 
 > 这两个网址要**去掉中间的空格**再访问：论坛会把用户名里连在一起的那两个字母自动打码，拆开写才能正常显示（下面的包名同理）。**懒得改就直接下帖子附件 —— 附件里的就是这一版。**
 
@@ -110,8 +115,8 @@
 
 ## 七、开源地址
 
-- Gitee（国内下载 + 镜像）：`https://gitee.com/kung fu code/fn-tv-photo`
-- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo`
+- Gitee（国内下载 + 镜像）：`https://gitee.com/kung fu code/fn-tv-photo` (网址需去掉空格)
+- GitHub：`https://github.com/kung fu code-rex/fn-tv-photo` (网址需去掉空格)
 
 （同样要**去掉空格**。发布页下载链接见上面「怎么装」一节。）
 

@@ -42,4 +42,45 @@ class PreviewOriginalTest {
         assertNull(PreviewOriginal.fromId("nonsense"))
         assertNull(PreviewOriginal.fromId(null))
     }
+
+    /**
+     * The cached original is the one thing that outvotes the setting, and only where the
+     * setting was about *waiting*: 仅用于幻灯片播放 prefers the thumbnail because paging by
+     * hand should be instant, and a file that is already on disk is instant.
+     *
+     * 否 is not about waiting — it says every preview is the large thumbnail, and it is also
+     * how somebody keeps a 12-megapixel decode off a box that cannot afford one — so a cache
+     * hit must not quietly overrule it.
+     */
+    @Test
+    fun `a cached original wins while paging by hand, but never against 否`() {
+        assertTrue(
+            PreviewOriginal.SLIDESHOW_ONLY.wantsOriginal(slideshowRunning = false, originalCached = true),
+        )
+        assertFalse(
+            PreviewOriginal.SLIDESHOW_ONLY.wantsOriginal(slideshowRunning = false, originalCached = false),
+        )
+        assertTrue(
+            PreviewOriginal.SLIDESHOW_ONLY.wantsOriginal(slideshowRunning = true, originalCached = false),
+        )
+        assertFalse(
+            PreviewOriginal.NEVER.wantsOriginal(slideshowRunning = false, originalCached = true),
+        )
+        assertFalse(
+            PreviewOriginal.NEVER.wantsOriginal(slideshowRunning = true, originalCached = true),
+        )
+        assertTrue(
+            PreviewOriginal.ALWAYS.wantsOriginal(slideshowRunning = false, originalCached = false),
+        )
+    }
+
+    @Test
+    fun `the cached argument defaults to no, so every existing caller means what it meant`() {
+        PreviewOriginal.entries.forEach { mode ->
+            assertEquals(
+                mode.wantsOriginal(slideshowRunning = false),
+                mode.wantsOriginal(slideshowRunning = false, originalCached = false),
+            )
+        }
+    }
 }

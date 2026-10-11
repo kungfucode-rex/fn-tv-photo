@@ -9,11 +9,24 @@
     pwsh -File tools/tv.ps1 text "10.0.2.2"
     pwsh -File tools/tv.ps1 status
     pwsh -File tools/tv.ps1 logcat
+
+  `pwsh` does not exist on a machine that only ships Windows PowerShell, so the same
+  commands work with `powershell` -- or by running the file directly, `& tools\tv.ps1 key
+  DPAD_DOWN`. `install` packages nothing: it installs app-debug.apk as it is on disk, so
+  run `tools/build.ps1 -Tasks assembleDebug` first or a stale build is what lands on the
+  emulator (`testDebugUnitTest` compiles but does not repackage).
+
+  Key names are Android's own (`input keyevent`). Back is `keyevent 4`: `DPAD_BACK` is
+  not a valid name and fails quietly.
 #>
 [CmdletBinding()]
 param(
   [Parameter(Position = 0)][string]$Action = 'status',
-  [Parameter(Position = 1)][string[]]$Rest = @(),
+  # ValueFromRemainingArguments, because a positional [string[]] collects a *single*
+  # positional argument: `key DPAD_DOWN DPAD_CENTER` used to fail with "cannot find a
+  # positional parameter that accepts DPAD_CENTER". Both spellings work now, and
+  # `-Rest @('DPAD_DOWN','DPAD_CENTER')` still does.
+  [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Rest = @(),
   [string]$ToolchainRoot = 'F:\android-toolchain',
   # The packaged id, not the code namespace: applicationId carries the author's own
   # prefix while the classes stay under com.tvphoto (see app/build.gradle.kts).

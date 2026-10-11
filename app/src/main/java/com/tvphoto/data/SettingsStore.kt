@@ -75,6 +75,16 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         set(value) = prefs.edit().putBoolean(KEY_SHUFFLE, value).apply()
 
     /**
+     * How the 文件夹 section lays its folders out.
+     *
+     * Persisted for the same reason as everything else here: a layout chosen once should
+     * still be there after a restart, or the toggle is a thing you press every time.
+     */
+    var folderLayout: FolderLayout
+        get() = FolderLayout.fromId(prefs.getString(KEY_FOLDER_LAYOUT, null)) ?: FolderLayout.DEFAULT
+        set(value) = prefs.edit().putString(KEY_FOLDER_LAYOUT, value.id).apply()
+
+    /**
      * Asset paths of the tracks ticked for the slideshow's background music, in the
      * order they play — which is the catalogue's order, not the order they were ticked.
      * An empty list means no music, which is the default.
@@ -182,6 +192,7 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         private const val KEY_SLIDESHOW = "slideshow_seconds"
         private const val KEY_PREVIEW_ORIGINAL = "preview_original"
         private const val KEY_SHUFFLE = "slideshow_shuffled"
+        private const val KEY_FOLDER_LAYOUT = "folder_layout"
         private const val KEY_MUSIC = "slideshow_music"
         private const val DEFAULT_SLIDESHOW_SECONDS = 8
     }

@@ -74,6 +74,7 @@
     <string name="viewer_quality_original">Original</string>
     <string name="viewer_quality_thumbnail">Thumbnail</string>
     <string name="viewer_original_failed">Could not load the original</string>
+    <string name="viewer_step_slow">The original has not arrived — showing the thumbnail</string>
     <string name="viewer_action_play">Play</string>
     <string name="viewer_action_pause">Pause</string>
     <string name="viewer_interval_option">%1$ds</string>
@@ -84,7 +85,7 @@
     <string name="viewer_added">%1$d new</string>
     <string name="viewer_removed">%1$d removed</string>
     <string name="viewer_list_changed">%1$d new · %2$d removed</string>
-    <string name="viewer_music_label">Background music</string>
+    <string name="viewer_music_label">Music</string>
     <string name="viewer_music_none">None</string>
     <string name="viewer_music_count">%1$d tracks</string>
     <string name="viewer_music_hint">Up/down to choose · OK to tick · Back to close</string>
@@ -134,4 +135,51 @@
     <string name="settings_update_hint_retry">Press OK to try again</string>
     <string name="settings_update_hint_reason">%1$s · press OK to try again</string>
     <string name="settings_update_hint_manual">Open %1$s on another device to install it by hand</string>
+    <!-- 图评 (photo review) -->
+    <string name="settings_review">Photo review</string>
+    <string name="settings_review_off">Off</string>
+    <string name="settings_review_slideshow">Slideshow only</string>
+    <string name="settings_review_all">Everything</string>
+    <string name="settings_review_hint">A QR code appears on the TV; guests scan it and their comments drift across the photo.</string>
+    <string name="settings_review_server">Review server</string>
+    <string name="settings_review_server_unset">Not set</string>
+    <string name="settings_review_server_hint">An address a phone can reach, e.g. 192.168.31.14:8080, or https://… if the server has a certificate. Blank turns photo review off.</string>
+    <string name="settings_review_status">Review connection</string>
+    <string name="settings_review_scope">Upload scope</string>
+    <string name="settings_review_scope_current">This album</string>
+    <string name="settings_review_scope_all">All albums</string>
+    <string name="settings_review_danmaku">Danmaku</string>
+    <string name="settings_review_danmaku_off">Off</string>
+    <string name="settings_review_danmaku_few">Few</string>
+    <string name="settings_review_danmaku_many">Many</string>
+    <string name="settings_review_danmaku_hint">One value governs text size, track count and whether recent comments are replayed.</string>
+    <string name="settings_review_extend">Hold the photo when a comment arrives</string>
+    <string name="settings_review_extend_hint">Extends the current photo until that comment has crossed, up to 6 s.</string>
+    <string name="settings_yes">Yes</string>
+    <string name="settings_no">No</string>
+
+    <!-- Viewer. The QR caption is deliberately three words: it sits under a 96dp code in
+         the corner of a photograph, and anything longer starts competing with the picture
+         it is describing. -->
+    <string name="viewer_comments">Comments %1$d</string>
+    <string name="viewer_qr_hint">Scan to comment</string>
+
+    <!-- The 图评 button in the viewer's corner, and the three rows its menu opens. -->
+    <string name="viewer_action_review">Comments</string>
+    <string name="viewer_review_qr">QR code</string>
+    <string name="viewer_review_danmaku">Danmaku</string>
+    <string name="viewer_review_danmaku_amount">Danmaku amount</string>
+    <string name="settings_review_slideshow_on">Photo review</string>
+
+    <!-- The two words a switch shows. Not Yes/No: these rows turn a *layer* on and off
+         rather than answering a question, and On/Off is the plainer reading on a television
+         where the value is the only thing visible. -->
+    <string name="switch_on">On</string>
+    <string name="switch_off">Off</string>
+
+    <!-- 文件夹's layout toggle and its grid card. The button names what the press will
+         switch *to*, so the two labels are the two shapes, not "switch layout". -->
+    <string name="folders_layout_grid">Grid</string>
+    <string name="folders_layout_list">List</string>
+    <string name="folders_count">%1$d</string>
 </resources>

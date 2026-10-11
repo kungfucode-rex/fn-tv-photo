@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 /**
  * Keeps a cache window ahead of wherever the user has moved to.
  *
- * Four details matter:
+ * Five details matter:
  *
  *  - the window is anchored at [anchor] — the photo being looked at — so paging
  *    forward is what gets accelerated, rather than the top of a list the user has
@@ -26,10 +26,11 @@ import kotlinx.coroutines.launch
  *    focus change would cancel downloads already in flight, so scrolling would
  *    starve the cache instead of filling it;
  *  - while [hold] says the screen is waiting for a picture of its own, the window
- *    stands down entirely — those downloads leave the same client and the same wire
- *    as the one the user is looking at, and warming a photo nobody has opened yet
- *    must never be what makes the visible one late. The held window restarts from
- *    the anchor when it is let go, so nothing is lost but the time it was held;
+ *    stands down — see [narrowWhenHeld] for the one case where standing down is
+ *    the wrong answer and the window is narrowed instead;
+ *  - [restartKey] re-anchors the window from scratch when it changes, for the rare
+ *    facts — which tier is being warmed, whether a show is running — that make the
+ *    window's own contents wrong rather than merely stale;
  *  - the anchor is handed over **as state** and read inside this composable's own
  *    coroutine. Taking it as a plain `Int` made every D-pad move recompose the screen
  *    that owns it — grid, item lambdas and all — for a value only this window cares
@@ -37,7 +38,8 @@ import kotlinx.coroutines.launch
  *
  * [hold] is a lambda rather than a `Boolean` for the same reason as the anchor: it is
  * read inside the coroutine, so the screen that owns it does not recompose every time
- * the photo it is waiting for arrives.
+ * the photo it is waiting for arrives. Under [narrowWhenHeld] it is handed on to
+ * [prefetch] as well, which reads it between batches and never stops.
  *
  * The prefetch runs in the composition's scope, so leaving the screen cancels it.
  */
@@ -47,37 +49,63 @@ fun PrefetchAhead(
     anchor: State<Int>,
     window: Int = DEFAULT_WINDOW,
     hold: () -> Boolean = { false },
-    prefetch: suspend (fromIndex: Int) -> Unit,
+    /**
+     * Whether a held window is stopped outright or merely narrowed.
+     *
+     * Stopping is what a grid wants: the photo the user has just opened shares the wire
+     * with the window, and nothing the window was warming is on screen anyway, so the
+     * window can wait and start again from where it was let go.
+     *
+     * A running slideshow is the other case. There the window is the only thing that can
+     * have the *next* original ready — the show draws its next photo from the whole list,
+     * so nothing else predicts it — and a download that is stopped has to start again from
+     * nothing, because only a complete body becomes a disk cache entry. Narrowed to one
+     * download while a step is in flight, the window loses the wire to the visible photo
+     * and still advances; stopped, it never gets anywhere, and the show runs on
+     * thumbnails no matter how long it is left playing.
+     */
+    narrowWhenHeld: Boolean = false,
+    /** Re-anchors the window from scratch when this changes. */
+    restartKey: Any? = Unit,
+    prefetch: suspend (fromIndex: Int, held: () -> Boolean) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val currentPrefetch = rememberUpdatedState(prefetch)
     var job by remember { mutableStateOf<Job?>(null) }
 
-    LaunchedEffect(itemCount) {
+    LaunchedEffect(itemCount, restartKey) {
         if (itemCount <= 0) return@LaunchedEffect
         var windowStart = NOT_STARTED
 
-        snapshotFlow { anchor.value to hold() }
-            .distinctUntilChanged()
-            .collect { (requested, held) ->
-                if (held) {
+        try {
+            snapshotFlow { anchor.value to (if (narrowWhenHeld) false else hold()) }
+                .distinctUntilChanged()
+                .collect { (requested, stopped) ->
+                    if (stopped) {
+                        job?.cancel()
+                        job = null
+                        return@collect
+                    }
+
+                    val start = requested.coerceIn(0, itemCount - 1)
+                    // A window that was stood down starts again from the anchor, even when
+                    // the anchor has not moved out of the window it was stopped on.
+                    val restarted = job == null
+                    val stillInsideWindow = !restarted && windowStart != NOT_STARTED &&
+                        start >= windowStart && start < windowStart + window
+                    if (stillInsideWindow) return@collect
+
+                    windowStart = start
                     job?.cancel()
-                    job = null
-                    return@collect
+                    job = scope.launch { currentPrefetch.value(start, hold) }
                 }
-
-                val start = requested.coerceIn(0, itemCount - 1)
-                // A window that was stood down starts again from the anchor, even when
-                // the anchor has not moved out of the window it was stopped on.
-                val restarted = job == null
-                val stillInsideWindow = !restarted && windowStart != NOT_STARTED &&
-                    start >= windowStart && start < windowStart + window
-                if (stillInsideWindow) return@collect
-
-                windowStart = start
-                job?.cancel()
-                job = scope.launch { currentPrefetch.value(start) }
-            }
+        } finally {
+            // The window belongs to this key: a restart (a new tier, a show starting) or
+            // leaving the screen ends the downloads it owns rather than leaving them to
+            // run under a window that no longer exists.
+            job?.cancel()
+            job = null
+        }
     }
 }
 

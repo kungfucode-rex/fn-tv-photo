@@ -42,6 +42,7 @@ import coil3.compose.AsyncImage
 import com.tvphoto.R
 import com.tvphoto.domain.MediaItem
 import com.tvphoto.domain.SubFolder
+import com.tvphoto.domain.needsNextPage
 import com.tvphoto.ui.ContentState
 import com.tvphoto.ui.MainViewModel
 import com.tvphoto.ui.Screen
@@ -83,7 +84,9 @@ fun GalleryScreen(viewModel: MainViewModel, screen: Screen) {
         snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
             .collect { lastVisible ->
-                if (gallery.canLoadMore && lastVisible >= media.size - PREFETCH_DISTANCE) {
+                if (gallery.canLoadMore &&
+                    needsNextPage(lastVisible, media.size, showRunning = false)
+                ) {
                     viewModel.loadMore()
                 }
             }
@@ -98,7 +101,7 @@ fun GalleryScreen(viewModel: MainViewModel, screen: Screen) {
     PrefetchAhead(
         itemCount = media.size,
         anchor = anchor,
-        prefetch = { from ->
+        prefetch = { from, _ ->
             viewModel.warmImageCache(media, from, previewOriginal.wantsOriginal(false))
         },
     )
@@ -267,8 +270,6 @@ private fun PhotoCell(
         }
     }
 }
-
-private const val PREFETCH_DISTANCE = 8
 
 /** Fallback used only when the view model has not produced a title yet. */
 private fun fallbackMonthTitle(year: Int, month: Int): String = "%04d-%02d".format(year, month)

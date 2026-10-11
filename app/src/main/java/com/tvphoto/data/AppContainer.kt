@@ -15,6 +15,8 @@ import com.tvphoto.data.fn.FnCookieJar
 import com.tvphoto.data.fn.FnHttp
 import com.tvphoto.data.fn.FnHttpClient
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.review.ReviewRepository
+import com.tvphoto.data.review.ReviewSettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +70,19 @@ class AppContainer(context: Context) {
     private val api = FnApi(signedHttp)
 
     val photos = PhotoRepository(sessions, api)
+
+    /**
+     * 图评: the QR code and the danmaku layer.
+     *
+     * Its own settings and its own OkHttp client, deliberately not the NAS clients above:
+     * those pin the NAS's self-signed certificate on first use, and a review server on a
+     * LAN has an ordinary certificate or none at all. Sharing them would reject the review
+     * server for the one reason that says nothing about whether it is the right server
+     * (docs/tuping-design.md §9.1).
+     */
+    val reviewSettings: ReviewSettingsStore = ReviewSettingsStore(appContext)
+
+    val review: ReviewRepository = ReviewRepository(appContext, reviewSettings)
 
     /**
      * The slideshow's background music. Owned here rather than by the viewer: the

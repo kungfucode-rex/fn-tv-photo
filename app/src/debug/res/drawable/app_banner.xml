@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The debug build's TV banner: the release photo stack in the debug palette, over a
+  strip that says DEBUG.
+
+  This is the tile the leanback launcher draws in 我的应用, and the package id is the
+  only other difference between the two APKs - so a debug build and a release build of
+  the same version used to appear as two identical tiles. The strip is the fix, and it
+  is a strip rather than a word floating over the artwork because the launcher draws
+  this at whatever size it likes: a solid band keeps the word inside something, so a
+  small tile still reads as "this one is different" even when the letters do not.
+
+  Colours are the debug palette from drawable/app_icon_foreground.xml; the geometry is
+  the release banner's, unchanged, for the same reason the release banner gives.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path
+        android:fillColor="#1B1030"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- back card -->
+    <path
+        android:fillColor="#2E1B4D"
+        android:pathData="M78,46h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- middle card -->
+    <path
+        android:fillColor="#41286B"
+        android:pathData="M92,38h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- front photo -->
+    <path
+        android:fillColor="#140B22"
+        android:pathData="M106,30h150a8,8 0 0 1 8,8v92a8,8 0 0 1 -8,8h-150a8,8 0 0 1 -8,-8v-92a8,8 0 0 1 8,-8z" />
+
+    <!-- sun -->
+    <path
+        android:fillColor="#FFC24B"
+        android:pathData="M232,58m-11,0a11,11 0 1,0 22,0a11,11 0 1,0 -22,0" />
+
+    <!-- mountains -->
+    <path
+        android:fillColor="#E056C0"
+        android:pathData="M106,130l38,-44 26,30 20,-22 46,36z" />
+
+    <path
+        android:fillColor="#A32C86"
+        android:pathData="M106,130l30,-34 22,34z" />
+
+    <!-- the strip, over the bottom of the card stack -->
+    <path
+        android:fillColor="#FFC24B"
+        android:pathData="M0,144h320v36h-320z" />
+
+    <!--
+      DEBUG, spelled with a 5x7 bitmap font: one rectangle per filled cell, no font is
+      available in a vector drawable. The first attempt was 3x5, and the reason it is not
+      any more is that a B and an E are the same picture at that size - the strip read
+      "DEEUG" in the preview it was drawn from. The shapes, one row per line:
+
+        D      E      B      U      G
+        1111.  11111  1111.  1...1  .1111
+        1...1  1....  1...1  1...1  1....
+        1...1  1....  1...1  1...1  1....
+        1...1  1111.  1111.  1...1  1..11
+        1...1  1....  1...1  1...1  1...1
+        1...1  1....  1...1  1...1  1...1
+        1111.  11111  1111.  .111.  .111.
+
+      Cells are 4 units, letters start at x=100/125/150/175/200, rows at y=148.
+    -->
+    <path
+        android:fillColor="#1B1030"
+        android:pathData="M100,148h4v4h-4zM104,148h4v4h-4zM108,148h4v4h-4zM112,148h4v4h-4zM100,152h4v4h-4zM116,152h4v4h-4zM100,156h4v4h-4zM116,156h4v4h-4zM100,160h4v4h-4zM116,160h4v4h-4zM100,164h4v4h-4zM116,164h4v4h-4zM100,168h4v4h-4zM116,168h4v4h-4zM100,172h4v4h-4zM104,172h4v4h-4zM108,172h4v4h-4zM112,172h4v4h-4zM125,148h4v4h-4zM129,148h4v4h-4zM133,148h4v4h-4zM137,148h4v4h-4zM141,148h4v4h-4zM125,152h4v4h-4zM125,156h4v4h-4zM125,160h4v4h-4zM129,160h4v4h-4zM133,160h4v4h-4zM137,160h4v4h-4zM125,164h4v4h-4zM125,168h4v4h-4zM125,172h4v4h-4zM129,172h4v4h-4zM133,172h4v4h-4zM137,172h4v4h-4zM141,172h4v4h-4zM150,148h4v4h-4zM154,148h4v4h-4zM158,148h4v4h-4zM162,148h4v4h-4zM150,152h4v4h-4zM166,152h4v4h-4zM150,156h4v4h-4zM166,156h4v4h-4zM150,160h4v4h-4zM154,160h4v4h-4zM158,160h4v4h-4zM162,160h4v4h-4zM150,164h4v4h-4zM166,164h4v4h-4zM150,168h4v4h-4zM166,168h4v4h-4zM150,172h4v4h-4zM154,172h4v4h-4zM158,172h4v4h-4zM162,172h4v4h-4zM175,148h4v4h-4zM191,148h4v4h-4zM175,152h4v4h-4zM191,152h4v4h-4zM175,156h4v4h-4zM191,156h4v4h-4zM175,160h4v4h-4zM191,160h4v4h-4zM175,164h4v4h-4zM191,164h4v4h-4zM175,168h4v4h-4zM191,168h4v4h-4zM179,172h4v4h-4zM183,172h4v4h-4zM187,172h4v4h-4zM204,148h4v4h-4zM208,148h4v4h-4zM212,148h4v4h-4zM216,148h4v4h-4zM200,152h4v4h-4zM200,156h4v4h-4zM200,160h4v4h-4zM212,160h4v4h-4zM216,160h4v4h-4zM200,164h4v4h-4zM216,164h4v4h-4zM200,168h4v4h-4zM216,168h4v4h-4zM204,172h4v4h-4zM208,172h4v4h-4zM212,172h4v4h-4z" />
+</vector>

@@ -45,7 +45,13 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   avatars. Hidden clusters are filtered out. An empty list is a normal state (AI
   indexing off), so it explains that instead of offering a retry.
 - **Folders** — the folders the gallery app manages, with drill-down into
-  subfolders and their media.
+  subfolders and their media. A **网格/列表** button in the header names what the press will
+  switch *to* — it reads 网格 while the list is showing — so the label is the shape you get;
+  both shapes are remembered, and they share one position, because landing somewhere else in
+  the same library would be a second invisible jump on top of the one the user asked for. The
+  grid answers *how many folders there are and which is which* in one look, each card carrying
+  its own count; the list truncates nothing and shows what a folder is called and where it
+  lives.
 - **Party mode** — a running slideshow re-reads the album every **30 s**, so a picture a
   colleague sends to the album joins the rotation without anyone touching the remote,
   and one the host deletes leaves it. Arrivals are appended rather than re-sorted into
@@ -77,6 +83,26 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   itself walks photos only: a clip in the rotation would stop the advance and talk over
   the music, so videos are looked past in either order. No permanent on-screen shortcut
   bar; toggling the slideshow shows a brief notice that dismisses itself.
+- **图评 (photo review) — a QR code on the television, a comment written on a phone, and the
+  comment crossing the photo as danmaku.** It needs a server of your own: see **The 图评
+  (tuping) server** below. By default it appears **only while a slideshow is running**: a QR
+  code sits in the photo's bottom-right corner (opening the information band takes it away —
+  that corner belongs to the band and its buttons), and a phone that scans it lands on a page
+  with a comment box: no app, no sign-in, and the name may be left as 匿名. The comment crosses
+  the photo within a second or two — **少** is at most two rows of them, **多** at most four,
+  taken in turn, with the next comment on a row waiting for the one ahead of it to clear 200px
+  (about 0.9s); a comment may be 20 characters, which is what a line can actually show at
+  1080p, and the server's length limit is the same number. The **图评 button in the viewer's
+  corner**, between 原图 and 幻灯片, decides **this photo, right now**: OK opens three switches
+  above it — 二维码 on/off, 弹幕 on/off, 弹幕数量 off/少/多 — left/right walks the rows, up/down
+  changes a value, Back closes it. The six rows in Settings are the defaults (图评
+  off/仅幻灯片/全部, 图评服务器, 图评连接状态, 上传范围 current album/all albums, 弹幕, 有新评论时
+  多停一会儿); **图评连接状态** says whether the server is unreachable or simply does not know
+  this television — a TV has no console, and that row is the only place the reason can be read.
+  **A comment deleted on the phone comes off the television**: the server pushes a comment's
+  *state* rather than "a new comment", and the television replaces its own copy by id, so a
+  line already crossing finishes that pass (under fifteen seconds) and is never offered again.
+  图评 is for photos only: a video gets no code and no danmaku layer.
 - **A photo that has not arrived is not a black screen** — the viewer opens on a spinner
   and 加载中… until the first picture is decoded, and drops them the instant it is.
   Paging never needs them: the photo
@@ -117,7 +143,14 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
   photo now while a slideshow has seconds to spend and is the thing being watched closely.
   Moving to originals starts with the *next* photo: the one on screen is not fetched
   again. This is the default; wanting one photo at full size right now is the viewer's
-  **原图** button instead, which leaves the setting alone.
+  **原图** button instead, which leaves the setting alone. **A photo whose original is
+  already in the cache is drawn from it while paging by hand too**: the wait is what the
+  thumbnail default is *for*, and a file already on disk has no wait — so the viewer asks
+  the disk about the photo on screen and the eight after it, points straight at the
+  original for the ones that answer yes, and brings the one on screen over on the hidden
+  layer, so nothing goes black. **否 is not overridden**: it says every preview is the
+  large thumbnail, and it is also the way off a box that cannot afford a multi-megapixel
+  decode, so a cache hit does not overrule it.
 - **Check for updates** — **Settings → 检测升级** asks Gitee and GitHub at once when the screen
   appears, and again on every OK. Both are asked because they are reachable from different
   halves of the world: Gitee from the domestic networks this app's users are on, GitHub from
@@ -181,15 +214,24 @@ rounded square); Android 6–7 gets a layer-list fallback, that being this app's
 - **Fast viewing** — the cache is kept warm for the next 50 of **whatever is about to be
   shown** (the large thumbnail by default, the original when previews are set to originals
   or the slideshow is running), *starting from the photo you are on*, so paging forward is
-  what gets accelerated. That
-  window stands down completely while the viewer is waiting for a picture of its own —
-  the one on screen, or the one a page turn just asked for — because a prefetch shares
-  the client and the wire with the photo being looked at, and warming something nobody
-  has opened yet must never be what makes that photo late. Measured on the emulator with
-  previews set to originals, originals delayed by 12 s and a cold cache, the two seconds
-  after the viewer opened
-  carried **one** original request with the window held and **five** without it; once the
-  photo landed the window resumed on its own. Media requests also run
+  what gets accelerated. In a grid that window stands down completely while the viewer is
+  waiting for a picture of its own — the one on screen, or the one a page turn just asked
+  for — because a prefetch shares the client and the wire with the photo being looked at,
+  and warming something nobody has opened yet must never be what makes that photo late.
+  Measured on the emulator with previews set to originals, originals delayed by 12 s and a
+  cold cache, the two seconds after the viewer opened carried **one** original request with
+  the window held and **five** without it; once the photo landed the window resumed on its
+  own. **In the viewer, holding is a narrowing rather than a stop**: one download is left
+  running while the screen waits, because a cancelled download has to start again from
+  nothing — only a complete body becomes a disk cache entry — and on a link slower than the
+  slideshow's interval, stopping at every step is what fills nothing at all. While a show
+  runs the window also covers the **whole list** (up to 120 stills), because a shuffled
+  show's next photo is not the next one along and a positional window can only be right by
+  luck. And a step that reaches its patience ceiling — which follows the interval, 4–12 s —
+  no longer throws its original away: the thumbnail goes up on the **visible** layer, the
+  download keeps running behind it, and the original takes the screen when it lands. All
+  three were measured against a real NAS and its shared album (12 MB originals, 8 s,
+  shuffled — see item 15). Media requests also run
   eight-at-a-time rather than OkHttp's default five, because the
   prefetcher and the thumbnails on screen share one client: with five, the pictures the
   user is looking at queued behind full-size originals nobody had asked for yet, which
@@ -265,10 +307,10 @@ disk cache and nothing else: the app runs memory-only, and says so in the log.
 | Key | Timeline / Albums / Folders | Viewer |
 | --- | --- | --- |
 | D-pad | move focus | — |
-| ← / → | — | previous / next photo; picks a control when the slideshow row is open, or when both 原图 and 幻灯片 are in the corner |
-| ↑ / ↓ | — | show / hide the information band; once up, they walk the corner: 原图 → 幻灯片 → the settings row; changes the value when a stepper is selected |
-| OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the highlighted control |
-| Back | up one level | close the slideshow row if it is open, otherwise leave the viewer |
+| ← / → | — | previous / next photo; walks the controls instead when a row is open (the slideshow's settings row or 图评's three switches), or when more than one button is in the corner |
+| ↑ / ↓ | — | show / hide the information band; once up, they walk the corner: 原图 → 图评 → 幻灯片 → close the band; changes the value when a stepper is selected |
+| OK | open the focused item | start / pause slideshow (play/pause for video); with the band up, operates the highlighted control — on 图评 it opens its three switches, on 幻灯片 the settings row |
+| Back | up one level | close the open row if there is one, otherwise leave the viewer |
 | Back ×2 | exit the app (from the top level) | — |
 
 Paging walks a pointer rather than jumping, so ← / → show where it has got to: arrows in
@@ -356,8 +398,8 @@ press at a time.
 
 A signed APK is on the GitHub release page, so building it is optional:
 
-**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.3.7.apk`,
-25.6 MiB. The same release is mirrored on Gitee, which is the reachable one on a domestic
+**<https://github.com/kungfucode-rex/fn-tv-photo/releases/latest>** — `FN-tvphoto-1.4.11.apk`,
+25.7 MiB. The same release is mirrored on Gitee, which is the reachable one on a domestic
 network: **<https://gitee.com/kungfucode/fn-tv-photo/releases/latest>**. The file also lands
 in the share described below; these are one build.
 
@@ -375,8 +417,8 @@ To build it yourself:
 
 ```powershell
 pwsh -File tools/build.ps1 -Tasks assembleRelease
-# -> app/build/outputs/apk/release/FN-tvphoto-1.3.7.apk
-#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.3.7-<stamp>.apk
+# -> app/build/outputs/apk/release/FN-tvphoto-1.4.11.apk
+#    and, in the same run, \\fnos-ms01\Temp\软件\FN-tvphoto-1.4.11-<stamp>.apk
 ```
 
 A run that assembles an APK **uploads it to the share the TV is installed from** as well
@@ -390,12 +432,12 @@ authenticated does not fail the build — it warns, and the APK is still in
 `app/build/outputs/apk/`.
 
 The release APK is named after the app **and its version** rather than after the Gradle
-variant — `FN-tvphoto-1.3.7.apk`. The version string is written once, as `appVersionName` in
+variant — `FN-tvphoto-1.4.11.apk`. The version string is written once, as `appVersionName` in
 `app/build.gradle.kts`; the manifest, the settings screen and the file name all take it from
 there, so bumping the version renames the artifact with it. `app-release.apk` was the
 alternative, and it says nothing about which app or which version the file is once it is
 sitting in a TV's download folder. The name on the share then carries that APK's own **build
-time** — `FN-tvphoto-1.3.7-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
+time** — `FN-tvphoto-1.4.11-<yyyyMMdd-HHmmss>.apk` — so an older build stays there to fall back
 to and nothing is silently overwritten. The stamp comes from the file's timestamp rather
 than the clock at upload, so re-publishing the same APK reuses the same name instead of
 piling up duplicates. `tools/publish-apk.ps1` and `tools/tv.ps1` take the newest file
@@ -414,7 +456,7 @@ script uses a character outside ASCII.
 Then install it on the TV:
 
 ```bash
-adb install -r app/build/outputs/apk/release/FN-tvphoto-1.3.7.apk
+adb install -r app/build/outputs/apk/release/FN-tvphoto-1.4.11.apk
 ```
 
 The release build is signed with `app/tvphoto.jks`. That keystore is **not** in
@@ -588,6 +630,8 @@ writes a comment; the comment floats across the screen.
 | HTTPS is on but the QR code still says `http://…` | That photo was registered by a television still using http: change its **图评服务器** row to `https://…` and register again, or pin `TUPING_BASE_URL: "https://your.domain"` in the compose file. |
 | HTTPS configured, but http still works and https does not | Two things, in this order: ① `/usr/local/bin/tupingd -check` inside the container printing **no `tls` line at all** means this binary does not know about TLS (`kungfucode/tuping:0.1.0` and earlier; 0.1.1 is the first with it) — move the tag to 0.1.1 or build it yourself; ② a `tls = off` line, or `tls=false` on the listening log line, means the variables never reached the container: after editing the compose file you must press **Start / redeploy**, not **Restart**. |
 | The container stays unhealthy after enabling HTTPS | The old compose file's health check is `wget http://127.0.0.1:8080/healthz`, which cannot work over TLS — the service is fine. Switch to the binary's own probe: `test: ["CMD", "/usr/local/bin/tupingd", "-health"]`. |
+| The page says 发得太快了，歇一会儿 (HTTP 429) | **That is the rate limit working, not a fault.** Creating a comment carries four budgets: 5/min and 50/day per guest, 30/min per IP, 200/hour per photo, and 120/min for the endpoint as a whole — the last one ignores where the request came from, and it exists because the other three can all be evaded by arriving as somebody new. Wait a minute, or use another photo; the table and the reasoning are in [`docs/tuping-design.md`](docs/tuping-design.md) §7. |
+| A scanned code says 这张照片不在图评里 while the television shows a code that looks fine | That code was issued by the **previous** server: after a reinstall, a different `data/` directory, or a restore from an older backup, the short codes it minted match nothing in the new database. From 1.4.11 the app gets out of this by itself (a refused token makes it drop the old server's answers and register the photo on screen again); on anything earlier, restart the app. To keep the comments, do not change the `data/` directory. |
 
 ### Upgrading, backing up, removing
 
@@ -647,13 +691,28 @@ app/src/main/java/com/tvphoto/
     SlideshowMusic.kt     the tracks that ship with the app, and how a
                           selection of them is stored and ordered
     SlideshowMusicPlayer.kt  ExoPlayer looping the ticked tracks under a show
+    FolderLayout.kt   the folder list's two shapes (grid / list) and which is set
+    review/           图评, the album end of it
+      PhotoIdentity.kt    a photo's identity on this install (host + album + id)
+      ReviewClient.kt     the protocol client (its own OkHttp; no NAS pinning)
+      ReviewRepository.kt registration, comments, the socket, and the caches
+      ReviewSettings.kt   the six settings rows, address cleaning, the levels
+      ReviewModels.kt     protocol models, plus the "refused token" and "no such photo" reads
+      DeviceRepair.kt     the repair when a device is refused: a new device, and dropping
+                           the old server's answers
+      CommentMerge.kt     replace by id rather than append (the server pushes state)
+      DanmakuFeed.kt      the danmaku layer's tracks, speed and replay rules
   domain/Models.kt    UI-facing models
   domain/AppVersion.kt   how versions compare: the tag's leading v, missing segments, suffixes
   domain/PagingQueue.kt  the paging pointer: where the queue stands after one press
   domain/SlideshowOrder.kt  which picture a show moves to next: photos, skip the clips
+  domain/NextPage.kt     when the next page is due: the grid's scroll line, and always
+                          while a show runs
   ui/
     login/ home/ gallery/ viewer/   screens
     components/Spinner.kt   the drawn arc, shared by start-up and by the viewer
+    viewer/CornerMenu.kt    which corner row is expanded (slideshow settings / 图评 switches)
+    viewer/DanmakuOverlay.kt  draws the comments that cross the photo
     MainViewModel.kt  navigation stack + per-section state
     UpdateState.kt    the state machine behind the 检测升级 row
 app/src/main/assets/music/   the four tracks a slideshow can play
@@ -789,7 +848,9 @@ verification was built deliberately:
    **one** original — the photo on screen — where the same build with `hold = { false }`
    sent **five**, the visible photo twice over plus three prefetches (`/__control/media`).
    Fourteen seconds later, with the photo landed, the window had resumed on its own (five
-   originals). The music list was walked with nine tracks in it (that run predates 1.3.7, which
+   originals). (This measured the hold in a **grid and while paging by hand**; the viewer's
+   hold later became a narrowing to one download, and a running show's window covers the
+   whole list — decided against a real NAS, see item 15.) The music list was walked with nine tracks in it (that run predates 1.3.7, which
    cut the catalogue to four): it opens on the
    ticked row, scrolls itself to the last one, ticks it and takes
    the ticks off the two that shipped before. That last state — exactly one track
@@ -820,8 +881,8 @@ verification was built deliberately:
     viewer and its prefetch window send only `/m/` (the 1920px large thumbnail) and not a
     single `/o/`. Paging was walked again on a cold cache — image cache emptied, app
     restarted, and the first entry of the month opened (the mock puts a clip there; the
-    front layer was still fetching and the prefetch window was standing down, so the log
-    held nothing but the viewer's own traffic). Three presses right later the information
+    front layer was still fetching and the prefetch window was narrowed to one download, so the log
+    held almost nothing but the viewer's own traffic). Three presses right later the information
     band read `4 / 15`: the pointer walked three steps, only the third photo was fetched,
     and the two in between were neither shown nor ever asked for — the old queue fetched
     them and showed them one after another. The video was opened against an
@@ -840,7 +901,7 @@ verification was built deliberately:
     mock's originals delayed by five seconds (`__control/slow-media?ms=5000&sizes=o`):
     pressing ↑ opened the band, the details read **缩略图**, and the D-pad was already on
     the **原图 button to the left of 幻灯片**; pressing OK added exactly **one** `/o/` to the
-    mock's request log (the prefetch window stood down with it, so there was no other
+    mock's request log (the prefetch window narrowed to one download with it, so there was no other
     traffic) and started the button breathing — two screenshots a second apart show it
     dimming and brightening, with the photo itself **never leaving the screen**, so no
     black frame. Five seconds later the original landed, the same photo was swapped in
@@ -896,6 +957,98 @@ verification was built deliberately:
     `UpdateCheckerTest` (11 — a manifest missing fields, a hash in lower case or with spaces, an
     error page read as a manifest, no release yielding a version scraped out of a path, and two
     sources that answer differently offering the newer release rather than the faster one).
+
+15. **Four things only a device can show, walked against a real NAS** — the server on a public
+    address reached through a tunnel, and the album one that another account had shared (217
+    photos, originals of 4–12 MB, tens of seconds each on that link). Not a mock.
+    **① 图评 would not connect**: the server was up and the address was reachable from *inside*
+    the emulator (`toybox nc` connected), yet the button was grey — the address stored on the
+    television ended in a **NUL**, `trim()` does not remove a NUL (it is not whitespace), so
+    `HttpUrl` refused to parse it and the whole layer switched itself off, while the log said the
+    address was "blank, or not a URL". Reading *and* writing now both run the address through a
+    cleaner (which also folds the full-width punctuation the NAS address row has folded since
+    1.3.2), so a value an older build stored badly heals on read: the log became
+    `answered and accepts this device`, the server issued a device token, the database held 49
+    photos and 49 short codes whose `base_url` is the public address the television reported, and
+    the QR code was on screen.
+    **② Originals in a slideshow**: at an 8 s interval the screen showed the thumbnail, at 30 s
+    the original — while the originals *were* being downloaded all along, landing in the disk
+    cache; what the ceiling cancelled was the step's own download. After the fix (the ceiling
+    follows the interval, a late original keeps downloading and swaps in place, the window
+    narrows instead of stopping, and a running show's window covers the whole list) the same 8 s
+    shuffled show ran ~20 photos in a row **all at original**, with native memory climbing 50 → 62
+    MB and falling back, PSS 137 → 169 MB, and no crash past four minutes (before: an
+    `OutOfMemoryError` on OkHttp's reader thread killed the app after about seven).
+    **③ Danmaku rows**: `少` at most 2 rows, `多` at most 4, taken in turn, with the next comment
+    in a row waiting for the previous one's tail to clear by 200px (≈0.9 s); the height budget is
+    a share of the *whole screen* (2 rows ≤ 1/4, 4 rows ≤ 2/5), measured at y 118 / 205 for 少
+    (last line's bottom 247.5 ≤ 270) and y 113 / 197 / 281 / 365 for 多 (bottom 415 ≤ 432).
+    **④ Comment length**: cut from 80 characters to **20** (a line may be at most 45% of the
+    screen wide = 864px, and at 34 / 40px that is about 25 / 21 CJK characters, so five or six
+    characters in ten of an 80-character comment could only ever become an ellipsis): 21
+    characters is refused with 400 `too_long`, 20 goes through.
+    All four were verified on the device, and the off-device half is pinned by
+    `ReviewAddressTest` (10), `DanmakuFeedTest` (20), `StayExtensionTest` (8) and the server's
+    `go test ./...`; the reasoning is in [docs/tuping-design.md](docs/tuping-design.md) §17.12–17.14.
+
+16. **A slideshow that could not leave its first page** — reported as "播放五六十张之后，又从第一张开始
+    播放。后边其实还有很多照片", and *fifty-something* was the answer: `PAGE_SIZE = 60`, one page to a grid,
+    in an album of 217 photos and 6 videos (**223 items**) — and **the viewer never asked for the next
+    page**, because `loadMore()` has exactly one caller in the whole project, the grid's scroll watcher.
+    A show therefore cycled inside those sixty, and item 61 onward was never requested at all, which is
+    why their thumbnails were missing too: one cause wearing two symptoms. The rule is now the shared
+    `needsNextPage` (eight from the end; **unconditional while a show runs**, because a shuffled show
+    draws its next photo from anywhere in the list). Measured on the emulator: paging by hand, the
+    fiftieth press read `51 / 60` (the trigger is 52) and the sixty-fifth read **`66 / 120`** — the list
+    grew itself and the pointer crossed 60 without turning back; pressing 幻灯片 grew it from `120` to
+    **`223`** within **three seconds**, and nineteen seconds later the show was at **`192 / 223`** in
+    shuffled order instead of looping at 60. `NextPageTest` (5) pins the rule; the cause is written up
+    in [docs/tuping-design.md](docs/tuping-design.md) §17.16.
+17. **A comment deleted on the phone page came off the television, and a cached original was used while
+    paging by hand** — two things only a screen can show, both walked on the emulator against the mock
+    NAS with 图评 pointed at a local server. Deleting `ZZ-DELETE-ME-1` from the H5 admin page (303
+    `?ok=deleted`) left it during the pass it was already making and then never again: sampled every two
+    seconds through the accessibility tree, present at t+4 s and t+8 s, absent from t+12 s for the next
+    minute — and a fresh `ZZ-CONTROL-2` appeared within two seconds, so the socket was still healthy.
+    The half that is not about the server is `mergeCommentStates` (7 tests) replacing a comment by id
+    instead of only appending. For the preview tiers: cold cache showed `缩略图` with the `原图` button,
+    pressing it cached the original, the next photo (never fetched at full size) still showed `缩略图`,
+    and coming back to the first showed **`原图`** with nobody having pressed anything — as did leaving
+    the viewer and reopening it. Setting 预览原图 to **否** kept that same photo on `缩略图` with the
+    original sitting in the cache, which is the point of that option. `PreviewOriginalTest` (6) pins the
+    rule; both are written up in §17.17 and §17.18.
+18. **The code on screen replaces itself when the server behind it is replaced** — reported from a real
+    television ("我构建了新的 server 端，扫码后提示这张照片不在图片数据库里"; the H5 page's own words are
+    **这张照片不在图评里**), and the cause was found with *that server's own answers* rather than by
+    reading code: its `/healthz` said `uptimeSec:331` and `thumbBytes:0` (an empty thumbnail directory);
+    the television's log at 11:52:46 — the same minute the new server came up — read `does not accept this
+    device's token; registering again` followed by `live socket closed: … '404 Not Found'`; and both short
+    codes the television was holding answered **404** against the new server. It had re-registered the
+    *device* and not one photo, because the repair written for this in 1.4.2 deliberately kept the
+    photo-side identities, on the stated theory that "a photo registered again by the new device comes back
+    as the same photo" — true only while the server still holds those rows, which is exactly what the
+    repair exists for. With the fix, the whole replacement was walked on the **Android TV emulator**
+    against `tools/mock-review`: a code registered against the mock (`vloRGE`, `GET /c/vloRGE` → **200**),
+    then the mock **killed and replaced by an empty one** (`uptimeSec:5`, `thumbBytes:0`, `vloRGE` →
+    **404** — the report reproduced), then back to the grid and into the same photo, where the log ran
+    `does not accept this device's token; registering again` → `issued a new device; forgetting its old
+    answers` → `registering 1002 again; its code came from the old server`, the old PNG on disk was
+    deleted and replaced by a new code (`WEAC5P` → **200** on the new mock, while `vloRGE` stayed 404). In
+    the same pass the second door into that conclusion fired by itself (`the server does not hold
+    006GJPZ9…; registering it again`). The half that leaves the device is `ReviewRecoveryTest` (6): one
+    repair reports "the server was replaced" exactly once, a dropped packet is not a refusal, a refusal
+    that cannot be registered is not a replacement, two calls refused at once mint one device, `not_found`
+    is the server not holding the photo, and no other protocol answer is. The cause, the tradeoffs and one
+    deliberate ordering rule (re-register only while a code is on screen) are in
+    [docs/tuping-design.md](docs/tuping-design.md) §17.24.
+19. **The comment endpoint has a budget of its own: 120 a minute** — the server unit test
+    `TestCommentBudgetIsWholeService`. The three per-caller budgets in §7 can all be evaded by arriving as
+    somebody new, which is why the endpoint itself needs a ceiling that ignores where a request came from.
+    The test is the only shape in which that ceiling can be seen: five loopback source addresses (30/min
+    each) with a fresh `anonId` per request (5/min each), nobody over their own limit, and the endpoint
+    still refusing the 121st comment. A mutation check was run: commenting out that one line in the
+    handler makes the same test fail with `the endpoint took 122 comments, want exactly 120`. The
+    tradeoffs are in §17.25.
 
 Two bugs were found only by testing the way a user actually would:
 
@@ -966,6 +1119,26 @@ And one found by pointing the app at a real NAS for the first time:
 Gradle under `F:\android-toolchain`, so nothing is installed system-wide and the
 whole thing can be deleted in one step. `tools/setup-emulator.ps1` and
 `tools/create-avd.ps1` add an Android TV system image and an AVD.
+
+`tools/tv.ps1 install` **packages nothing**: it installs whatever
+`app/build/outputs/apk/debug/app-debug.apk` is on disk. So build first —
+`tools/build.ps1 -Tasks assembleDebug`, or `-Tasks testDebugUnitTest,assembleDebug` to do
+both in one run. `testDebugUnitTest` compiles but does not repackage, so running only that
+and then installing puts the *previous* APK on the emulator, and `install` does not check
+for it (which is where such a check would belong).
+
+**Publishing a test build is three steps — bump the version, build, put it on the share —
+and none of them is optional.** One command does all three: `tools/publish-test.ps1`. It
+adds one to `appVersionName`'s last number and to `versionCode`, calls
+`tools/build.ps1 -Tasks assembleDebug -PublishVariants debug`, calls
+`tools/publish-apk.ps1`, and then **reads the version back out of the file on the share**
+(failing if what landed there is not the new one). The first step is not bookkeeping: a
+television's installer refuses to lay a build over another with the same versionCode, so a
+debug APK published without a bump is one nobody can install — which is what happened to
+1.4.7 ("没有升级版本啊，新的装不上去"). The version journal in `app/build.gradle.kts` is prose
+and stays hand-written; the script prints the line to add (`// 24 is 1.4.10, which ...`) and
+the description is the writer's. `-DryRun` says what it would do without doing it, and
+`-GradleFile <copy> -BumpOnly` tests the bump by itself.
 
 One environment note worth recording: every Gradle distribution URL redirects to
 `github.com`, which was unreachable from this network. The toolchain script uses the

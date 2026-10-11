@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The debug build's icon artwork: the release landscape in the debug palette, with a
+  white corner cut in it.
+
+  The composition is deliberately *unchanged* - one sun, two ridges, bleeding off the
+  bottom edge so any launcher mask crops it gracefully (see the release copy of this
+  file). A debug build is this app; an icon that reads as a different product would be
+  worse than one that reads as the same product in a warning colour. What differs is the
+  family (violet plate, magenta ridges) and the white wedge, which is the one mark that
+  still says "not the release one" at the 48dp a TV's 我的应用 list draws - and does not
+  rely on telling magenta from teal in a dark room.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- sun, clear of both ridgelines: the release artwork's amber, kept -->
+    <path
+        android:fillColor="#FFC24B"
+        android:pathData="M72,30m-12,0a12,12 0 1,0 24,0a12,12 0 1,0 -24,0" />
+
+    <!-- far ridge -->
+    <path
+        android:fillColor="#E056C0"
+        android:pathData="M30,108L60,44L90,108Z" />
+
+    <!-- near ridge, one tone down so the two read apart at 48dp -->
+    <path
+        android:fillColor="#A32C86"
+        android:pathData="M2,108L36,60L70,108Z" />
+
+    <!-- the marker: a corner wedge in the one area the landscape leaves empty -->
+    <path
+        android:fillColor="#F2F5FA"
+        android:pathData="M10,10L34,10L10,34Z" />
+</vector>

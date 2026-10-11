@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The debug build's icon plate.
+
+  A debug APK and a release APK are two different applications to Android - the build
+  type adds the `.debug` suffix to applicationId - so both can live on the same
+  television at once, which is the whole point of testing one against the other. Until
+  this source set existed they also drew the *same* tile: same banner, same icon, same
+  name, and the only way to tell which was which was to open one and read its version.
+
+  Violet instead of the release navy, so the debug icon sits in the same family (the
+  amber sun and the two-ridge landscape are unchanged) while never being mistaken for
+  it. The rest of the debug palette lives in drawable/app_banner.xml and
+  drawable/app_icon_foreground.xml in this same source set.
+-->
+<resources>
+    <color name="ic_launcher_background">#1B1030</color>
+</resources>

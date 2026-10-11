@@ -207,6 +207,20 @@ ExoPlayer with a single header-adding interceptor.
 `m` 1920×1080; `l` is not served by current firmware. Prefer the relative URLs the
 server returns in `additional.thumbnail.*` rather than assembling them yourself.
 
+Those measurements are all of one 16:9 photo, which makes them read like a fixed
+16:9 box. They are not one: a tier caps the **shorter edge** — `xxs` 60, `xs` 180,
+`s` 240, `m` **1280** — and preserves the aspect ratio. An image whose short edge is
+already under the cap comes back untouched rather than upscaled, which is why a
+9:20 portrait returns from `m` as 1080×2400 while a 3000×4000 one returns as
+**1280×1707**. Nothing is cropped and nothing is letterboxed, so `m` is a faithful
+smaller copy of the frame.
+
+`o` is not a rendition at all: it is the original file. A 3000×4000 upload fetched
+back from `o` has the same length, the same SHA-256 and the same pixels as the bytes
+that went in. `m` is a re-encode, but a close one — that same sample's `m` sits
+2 bits out of 128 away from the original's perceptual hash, which is well inside the
+distance an identity comparison should accept. (Both measured 2026-10-09.)
+
 Video streams support HTTP `Range`, so seeking works. `isLive=1` marks an iPhone
 Live Photo; its clip is at `additional.thumbnail.videoUrl` and only deserves a
 badge when that URL is actually present.

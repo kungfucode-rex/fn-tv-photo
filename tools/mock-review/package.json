@@ -1,0 +1,15 @@
+{
+  "name": "tvphoto-mock-review",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Mock 图评 (tuping) review server and the contract test that also runs against the real Go server.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "verify": "node verify.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.18.0"
+  }
+}

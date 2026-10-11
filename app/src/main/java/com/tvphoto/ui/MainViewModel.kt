@@ -10,6 +10,8 @@ import com.tvphoto.TvPhotoApp
 import com.tvphoto.BuildConfig
 import com.tvphoto.data.ApkInstaller
 import com.tvphoto.data.AppContainer
+import com.tvphoto.data.FolderLayout
+import com.tvphoto.data.ImagePrefetcher
 import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SavedAccount
 import com.tvphoto.data.SessionState
@@ -18,6 +20,12 @@ import com.tvphoto.data.UpdateCheckResult
 import com.tvphoto.data.UpdateRelease
 import com.tvphoto.data.accountFor
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.review.DanmakuLevel
+import com.tvphoto.data.review.ReviewCandidate
+import com.tvphoto.data.review.ReviewMode
+import com.tvphoto.data.review.ReviewStatus
+import com.tvphoto.data.review.ReviewUploadScope
+import com.tvphoto.data.review.ReviewView
 import com.tvphoto.domain.AlbumItem
 import com.tvphoto.domain.FolderItem
 import com.tvphoto.domain.MediaItem
@@ -146,6 +154,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _slideshowShuffled = MutableStateFlow(container.settings.slideshowShuffled)
     val slideshowShuffled: StateFlow<Boolean> = _slideshowShuffled.asStateFlow()
 
+    /** How the 文件夹 section lays its folders out; toggled from that section's header. */
+    private val _folderLayout = MutableStateFlow(container.settings.folderLayout)
+    val folderLayout: StateFlow<FolderLayout> = _folderLayout.asStateFlow()
+
+    fun toggleFolderLayout() {
+        container.settings.folderLayout = container.settings.folderLayout.toggled()
+        _folderLayout.value = container.settings.folderLayout
+    }
+
     /**
      * The tracks that play under the slideshow, in playback order; empty means none.
      *
@@ -160,6 +177,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _signMode = MutableStateFlow(container.signMode)
     val signMode: StateFlow<SignMode> = _signMode.asStateFlow()
+
+    // ----------------------------------------------------------------- 图评
+
+    /**
+     * The review layer's settings, mirrored here so the settings screen and the viewer read
+     * one source.
+     *
+     * The server address is a plain getter rather than a flow: it is typed on a phone
+     * keyboard once per install, and there is nothing that can change it while the app is
+     * on screen.
+     */
+    val reviewServerUrl: String get() = container.reviewSettings.serverUrl
+
+    private val _reviewMode = MutableStateFlow(container.reviewSettings.mode)
+    val reviewMode: StateFlow<ReviewMode> = _reviewMode.asStateFlow()
+
+    private val _reviewUploadScope = MutableStateFlow(container.reviewSettings.uploadScope)
+    val reviewUploadScope: StateFlow<ReviewUploadScope> = _reviewUploadScope.asStateFlow()
+
+    private val _danmakuLevel = MutableStateFlow(container.reviewSettings.danmakuLevel)
+    val danmakuLevel: StateFlow<DanmakuLevel> = _danmakuLevel.asStateFlow()
+
+    private val _extendStayOnComment = MutableStateFlow(container.reviewSettings.extendStayOnComment)
+    val extendStayOnComment: StateFlow<Boolean> = _extendStayOnComment.asStateFlow()
+
+    private val _reviewSlideshowEnabled = MutableStateFlow(container.reviewSettings.slideshowEnabled)
+    val reviewSlideshowEnabled: StateFlow<Boolean> = _reviewSlideshowEnabled.asStateFlow()
+
+    private val _reviewShowQr = MutableStateFlow(container.reviewSettings.showQr)
+    val reviewShowQr: StateFlow<Boolean> = _reviewShowQr.asStateFlow()
+
+    private val _reviewShowDanmaku = MutableStateFlow(container.reviewSettings.showDanmaku)
+    val reviewShowDanmaku: StateFlow<Boolean> = _reviewShowDanmaku.asStateFlow()
+
+    /**
+     * What the review layer is doing, straight from the repository.
+     *
+     * Not mirrored into a local `MutableStateFlow`: a late registration publishes its
+     * answer minutes after the call that started it, and a mirror that only updated when
+     * *this* object was poked would leave the QR code off the screen it belongs on.
+     */
+    val reviewStatus: StateFlow<ReviewStatus> get() = container.review.status
+
+    val reviewView: StateFlow<ReviewView> get() = container.review.view
 
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val update: StateFlow<UpdateState> = _update.asStateFlow()
@@ -700,6 +761,161 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _signMode.value = mode
     }
 
+    // ------------------------------------------------------------------ 图评
+
+    fun setReviewMode(mode: ReviewMode) {
+        container.reviewSettings.mode = mode
+        _reviewMode.value = container.reviewSettings.mode
+    }
+
+    fun setReviewServerUrl(url: String) {
+        val changed = url.trim() != container.reviewSettings.serverUrl
+        container.reviewSettings.serverUrl = url
+        // A device token is issued *by* a server, so pointing the app at a different one
+        // leaves a credential the new server has never seen: `/healthz` answers, the status
+        // row says 已连接, and every photo upload is refused 设备令牌不对. `forgetDevice` is
+        // the remedy its own doc names for exactly this — and until now nothing called it.
+        //
+        // Only when the address really changed: re-saving the same address is what somebody
+        // does when 图评 is not working, and that must not throw away a working identity.
+        if (changed) container.review.forgetDevice()
+        refreshReviewStatus()
+    }
+
+    fun setReviewUploadScope(scope: ReviewUploadScope) {
+        container.reviewSettings.uploadScope = scope
+        _reviewUploadScope.value = container.reviewSettings.uploadScope
+    }
+
+    fun setDanmakuLevel(level: DanmakuLevel) {
+        container.reviewSettings.danmakuLevel = level
+        _danmakuLevel.value = container.reviewSettings.danmakuLevel
+    }
+
+    fun setExtendStayOnComment(extend: Boolean) {
+        container.reviewSettings.extendStayOnComment = extend
+        _extendStayOnComment.value = container.reviewSettings.extendStayOnComment
+    }
+
+    fun setReviewSlideshowEnabled(enabled: Boolean) {
+        container.reviewSettings.slideshowEnabled = enabled
+        _reviewSlideshowEnabled.value = container.reviewSettings.slideshowEnabled
+    }
+
+    /** The viewer's 图评 button: whether the code is drawn. */
+    fun setReviewShowQr(show: Boolean) {
+        container.reviewSettings.showQr = show
+        _reviewShowQr.value = container.reviewSettings.showQr
+    }
+
+    /** The viewer's 图评 button: whether the danmaku layer is drawn. */
+    fun setReviewShowDanmaku(show: Boolean) {
+        container.reviewSettings.showDanmaku = show
+        _reviewShowDanmaku.value = container.reviewSettings.showDanmaku
+    }
+
+    /**
+     * Asks the review server how it is doing, for the one row that can report it.
+     *
+     * A television has no console, so "连不上 192.168.31.14" is the difference between a
+     * mystery and a diagnosis — the same reasoning as the 上次崩溃 row.
+     */
+    fun refreshReviewStatus() {
+        viewModelScope.launch { container.review.checkStatus() }
+    }
+
+    /**
+     * Whether 图评 applies to the photo on screen right now.
+     *
+     * The facts this needs — is this a video, is a slideshow playing — come from the viewer
+     * rather than being guessed at here. A video is never eligible: it has its own rhythm,
+     * exactly like the QR code (docs/tuping-design.md §9.5).
+     *
+     * **The mode is deliberately not consulted any more.** It used to be, and the result was
+     * a switch that appeared to do nothing: with 仅幻灯片 set and no slideshow running, the
+     * viewer's 图评 menu would show 二维码 开 while the code drew nothing, because this gate
+     * had already refused to register the photo. A menu whose rows silently do nothing is
+     * worse than one with no rows.
+     *
+     * So the mode decides exactly one thing now — whether a *slideshow* registers each photo
+     * as it advances, which is what slows a long rotation down — and the display is governed
+     * by the 图评 menu's own switches. [ReviewMode.OFF] is still honoured: it is the one value
+     * that means "stop talking to the server at all".
+     */
+    fun reviewWantedFor(isVideo: Boolean): Boolean {
+        if (isVideo) return false
+        val review = container.reviewSettings
+        if (review.mode == ReviewMode.OFF) return false
+        return review.serverUrl.isNotBlank()
+    }
+
+    /**
+     * Whether a *slideshow* should register the photo it is moving to.
+     *
+     * The mode's real job. 仅幻灯片 leaves photos the user opens by hand free to register —
+     * that is what makes the 图评 menu work while browsing — but during a rotation the mode
+     * and the slideshow switch between them decide whether every frame is worth an upload.
+     */
+    fun slideshowRegistersReview(): Boolean =
+        container.reviewSettings.mode != ReviewMode.OFF &&
+            container.reviewSettings.slideshowEnabled
+
+    /**
+     * Hands the viewer's current photo to the review layer, or hides it.
+     *
+     * `slideshowRunning` is no longer a parameter: the gate that used it is gone, and what
+     * bounds the uploads is the viewer's prefetch — which only ever registers ahead while a
+     * slideshow is actually running — plus the 图评 menu's own switches. A registration is
+     * one small thumbnail over the LAN, and the alternative was the silent no-op described
+     * on [reviewWantedFor].
+     */
+    fun openReviewedPhoto(item: MediaItem?, source: String) {
+        val wanted = reviewWantedFor(isVideo = item?.isVideo ?: true)
+        container.review.openPhoto(
+            item = item,
+            source = source,
+            wanted = wanted,
+            danmakuLevel = container.reviewSettings.danmakuLevel,
+        )
+    }
+
+    /**
+     * Starts the live subscription for whatever photo was just handed over.
+     *
+     * A separate call from [openReviewedPhoto] on purpose: subscribing is what makes the
+     * server keep a socket open, and a socket per keystroke is not what a remote-control
+     * app should do.
+     */
+    fun startReviewedPhotoLive() {
+        container.review.startLive()
+    }
+
+    fun stopReviewedPhotoLive() {
+        container.review.stopLive()
+    }
+
+    /** Registers the photos the viewer is about to show, like the image prefetcher does. */
+    fun preRegisterReviewedPhotos(candidates: List<ReviewCandidate>, source: String) {
+        if (container.reviewSettings.serverUrl.isBlank()) return
+        container.review.preRegister(candidates, source)
+    }
+
+    /**
+     * True when 图评 applies to every full-screen photo rather than only during a show.
+     *
+     * The viewer uses it to decide whether pre-registering is worth doing at all: with the
+     * setting on 仅幻灯片 and no show running, there is nothing to pre-register *for*. The
+     * photo on screen still registers either way — that is what makes the 图评 menu work
+     * while browsing — but fetching the codes for the next four as well is only worth it
+     * when there is a show to fetch them for.
+     */
+    val isReviewOnForEveryPhoto: Boolean
+        get() = container.reviewSettings.mode == ReviewMode.ALL &&
+            container.reviewSettings.serverUrl.isNotBlank()
+
+    /** Reads a still's bytes from the cache Coil already filled; null when it is not there. */
+    suspend fun thumbnailBytesFor(url: String): ByteArray? = container.review.thumbnailBytesFor(url)
+
     // ------------------------------------------------------------ update check
 
     /**
@@ -901,6 +1117,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * Whether these bytes are already in the image disk cache.
+     *
+     * A snapshot open and nothing else: no network, no decode, no memory cache. That is what
+     * makes the answer cheap enough to let it change what the viewer draws — a preview whose
+     * original is already on disk has nothing to wait for, so it can be drawn at full size
+     * even when the setting would have drawn the thumbnail (`PreviewOriginal.wantsOriginal`).
+     *
+     * Any failure answers "not cached", which is the safe direction: the caller then does
+     * exactly what it did before this existed.
+     */
+    fun isImageCached(url: String): Boolean {
+        if (url.isBlank()) return false
+        return runCatching {
+            val cache = coil3.SingletonImageLoader.get(getApplication()).diskCache
+                ?: return@runCatching false
+            val snapshot = cache.openSnapshot(url) ?: return@runCatching false
+            snapshot.close()
+            true
+        }.getOrDefault(false)
+    }
+
+    /**
      * Warms the disk cache with the stills the viewer will ask for next, starting at
      * [fromIndex] — the photo the user is looking at, not the top of the list, so paging
      * forward is what gets accelerated.
@@ -911,17 +1149,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * ask for would fill the cache with files nothing reads and leave the ones it needs
      * on the wire.
      *
+     * [limit] is how many stills the caller wants warm. A grid leaves it at the default,
+     * because a reader's next move is the neighbouring photo; a running slideshow asks for
+     * the whole list it is drawing from, because a shuffled show's next photo is anywhere
+     * in it and a window anchored at the current position can only be right by luck.
+     *
+     * [held], when given, is handed to the prefetcher: while it answers true the window
+     * narrows to a single download instead of stopping — see `ImagePrefetcher.prefetch`.
+     * The slideshow passes it, because a download cancelled on every step is a download
+     * that never completes on a link slower than the show's own interval.
+     *
      * Suspending rather than launching internally on purpose: the caller owns the
      * job, so navigating away cancels the outstanding downloads. Videos are filtered
      * out — only stills belong in the image cache.
      */
-    suspend fun warmImageCache(items: List<MediaItem>, fromIndex: Int, original: Boolean) {
+    suspend fun warmImageCache(
+        items: List<MediaItem>,
+        fromIndex: Int,
+        original: Boolean,
+        limit: Int = ImagePrefetcher.DEFAULT_LIMIT,
+        held: (() -> Boolean)? = null,
+    ) {
         val stills = items.asSequence()
             .drop(fromIndex.coerceAtLeast(0))
             .filterNot { it.isVideo }
             .mapNotNull { it.stillUrl(original) }
             .toList()
-        container.prefetcher.prefetch(stills)
+        container.prefetcher.prefetch(
+            urls = stills,
+            limit = limit,
+            // An original is several megabytes; the viewer is likely to be asking for one
+            // of its own at the same time, so the window leaves it room rather than taking
+            // the whole client.
+            concurrency = if (original) {
+                ImagePrefetcher.ORIGINAL_CONCURRENCY
+            } else {
+                ImagePrefetcher.DEFAULT_CONCURRENCY
+            },
+            held = held ?: { false },
+        )
     }
 
     /**

@@ -74,17 +74,18 @@
     <string name="viewer_quality_original">原图</string>
     <string name="viewer_quality_thumbnail">缩略图</string>
     <string name="viewer_original_failed">原图加载失败</string>
+    <string name="viewer_step_slow">这张原图还没到，先看缩略图</string>
     <string name="viewer_action_play">播放</string>
     <string name="viewer_action_pause">暂停</string>
     <string name="viewer_interval_option">%1$d秒</string>
     <string name="viewer_interval_label">间隔</string>
-    <string name="viewer_order_label">播放顺序</string>
+    <string name="viewer_order_label">顺序</string>
     <string name="viewer_order_sequential">顺序</string>
     <string name="viewer_order_shuffle">随机</string>
     <string name="viewer_added">新增 %1$d 张</string>
     <string name="viewer_removed">移除 %1$d 张</string>
     <string name="viewer_list_changed">新增 %1$d 张 · 移除 %2$d 张</string>
-    <string name="viewer_music_label">背景音乐</string>
+    <string name="viewer_music_label">音乐</string>
     <string name="viewer_music_none">未选择</string>
     <string name="viewer_music_count">%1$d 首</string>
     <string name="viewer_music_hint">上下选择 · OK 勾选 · 返回关闭</string>
@@ -134,4 +135,53 @@
     <string name="settings_update_hint_retry">按 OK 重试</string>
     <string name="settings_update_hint_reason">%1$s · 按 OK 重试</string>
     <string name="settings_update_hint_manual">在别的设备打开 %1$s 手动安装</string>
+    <!-- 图评 (photo review). One row turns the whole layer on or off, a second names the
+         server, and a third reports whether it is reachable: a television has no
+         console, so "cannot reach 192.168.31.14" has to be readable on the screen. -->
+    <string name="settings_review">图评</string>
+    <string name="settings_review_off">关</string>
+    <string name="settings_review_slideshow">仅幻灯片</string>
+    <string name="settings_review_all">全部</string>
+    <string name="settings_review_hint">电视上出现二维码，客人扫码把评论发上来，评论以弹幕飘过。</string>
+    <string name="settings_review_server">图评服务器</string>
+    <string name="settings_review_server_unset">未设置</string>
+    <string name="settings_review_server_hint">手机能访问到的地址，例如 192.168.31.14:8080；服务器配了证书就填 https://开头的。留空即关闭图评。</string>
+    <string name="settings_review_status">图评连接状态</string>
+    <string name="settings_review_scope">上传范围</string>
+    <string name="settings_review_scope_current">当前相册</string>
+    <string name="settings_review_scope_all">全部相册</string>
+    <string name="settings_review_danmaku">弹幕</string>
+    <string name="settings_review_danmaku_off">关</string>
+    <string name="settings_review_danmaku_few">少</string>
+    <string name="settings_review_danmaku_many">多</string>
+    <string name="settings_review_danmaku_hint">一个值同时管字号、轨道数和是否重播最近几条。</string>
+    <string name="settings_review_extend">有新评论时多停一会儿</string>
+    <string name="settings_review_extend_hint">把当前这张的停留延长到那条弹幕走完，最多 6 秒。</string>
+    <string name="settings_yes">是</string>
+    <string name="settings_no">否</string>
+
+    <!-- Viewer. The QR caption is deliberately three words: it sits under a 96dp code in
+         the corner of a photograph, and anything longer starts competing with the picture
+         it is describing. -->
+    <string name="viewer_comments">评论 %1$d</string>
+    <string name="viewer_qr_hint">扫码加评论</string>
+
+    <!-- The 图评 button in the viewer's corner, and the three rows its menu opens. -->
+    <string name="viewer_action_review">图评</string>
+    <string name="viewer_review_qr">二维码</string>
+    <string name="viewer_review_danmaku">弹幕</string>
+    <string name="viewer_review_danmaku_amount">弹幕数量</string>
+    <string name="settings_review_slideshow_on">图评</string>
+
+    <!-- The two words a switch shows. Not 是/否: these rows turn a *layer* on and off
+         rather than answering a question, and 开/关 is the plainer reading on a television
+         where the value is the only thing visible. -->
+    <string name="switch_on">开</string>
+    <string name="switch_off">关</string>
+
+    <!-- 文件夹's layout toggle and its grid card. The button names what the press will
+         switch *to*, so the two labels are the two shapes, not "switch layout". -->
+    <string name="folders_layout_grid">网格</string>
+    <string name="folders_layout_list">列表</string>
+    <string name="folders_count">%1$d</string>
 </resources>

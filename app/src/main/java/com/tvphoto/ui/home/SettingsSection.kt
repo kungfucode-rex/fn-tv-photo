@@ -20,8 +20,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
@@ -32,10 +35,17 @@ import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SessionState
 import com.tvphoto.data.ThemeMode
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.review.DanmakuLevel
+import com.tvphoto.data.review.ReviewMode
+import com.tvphoto.data.review.ReviewStatus
+import com.tvphoto.data.review.ReviewUploadScope
+import com.tvphoto.ui.HomeSection
 import com.tvphoto.ui.MainViewModel
+import com.tvphoto.ui.PositionKeys
 import com.tvphoto.ui.UpdateState
 import com.tvphoto.ui.components.FocusableSurface
 import com.tvphoto.ui.components.SectionHeader
+import com.tvphoto.ui.components.TvTextField
 import com.tvphoto.ui.components.formatFileSize
 
 @Composable
@@ -44,6 +54,17 @@ fun SettingsSection(viewModel: MainViewModel) {
     val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
+    val reviewMode by viewModel.reviewMode.collectAsStateWithLifecycle()
+    val reviewUploadScope by viewModel.reviewUploadScope.collectAsStateWithLifecycle()
+    val danmakuLevel by viewModel.danmakuLevel.collectAsStateWithLifecycle()
+    val extendStayOnComment by viewModel.extendStayOnComment.collectAsStateWithLifecycle()
+    val reviewStatus by viewModel.reviewStatus.collectAsStateWithLifecycle()
+
+    // The address the user is editing, seeded from what is stored. A draft rather than a
+    // direct write on every keystroke: this is a television remote, and every character
+    // typed should not be a saved setting.
+    var serverDraft by remember { mutableStateOf(viewModel.reviewServerUrl) }
+    val serverUrl = viewModel.reviewServerUrl
 
     val session = (sessionState as? SessionState.SignedIn)?.session
     var cacheCleared by remember { mutableStateOf(false) }
@@ -54,6 +75,37 @@ fun SettingsSection(viewModel: MainViewModel) {
     // never a stale impression of a self-trimming LRU.
     LaunchedEffect(usageTick) {
         cachedPair = viewModel.imageCacheUsage()
+    }
+
+    // Asks the review server how it is doing, the moment this screen appears.
+    //
+    // It has to be *here* and not next to the 图评 rows below. A `LaunchedEffect` declared
+    // inside a scrolling column only runs once its position is composed, and on a 1080p
+    // screen the 图评 rows are below the fold — so the check never ran, the status stayed
+    // at its initial value, and the row read 关 with no explanation. That is exactly the
+    // failure this row exists to prevent, produced by the row's own placement.
+    LaunchedEffect(Unit) { viewModel.refreshReviewStatus() }
+
+    // Claim focus the first time this section is opened.
+    //
+    // Without this the section is unreachable by remote: the navigation rail holds focus,
+    // and D-pad never leaves it for the content column — so every row below the fold,
+    // 图评 included, could be scrolled to by nothing at all. The other sections claim
+    // focus the same way, through `shouldClaimFocus` in HomeScreen; settings had a
+    // `PositionKeys` entry and nothing that ever claimed it.
+    //
+    // Only on the first visit, so coming back from a sub-screen does not yank the cursor
+    // away from where it was left.
+    val firstRowFocus = remember { FocusRequester() }
+    val claimFocus = remember { viewModel.savedIndex(PositionKeys.forSection(HomeSection.Settings)) < 0 }
+    LaunchedEffect(Unit) {
+        if (claimFocus) runCatching { firstRowFocus.requestFocus() }
+    }
+
+    // Recorded once focus lands, so the rail does not grab it back on the next visit and
+    // the user is returned to this column instead of the menu.
+    LaunchedEffect(claimFocus) {
+        if (claimFocus) viewModel.saveIndex(PositionKeys.forSection(HomeSection.Settings), 0)
     }
 
     /** "1.2GB / 5.0GB", or the cleared confirmation for a moment after clearing. */
@@ -121,6 +173,7 @@ fun SettingsSection(viewModel: MainViewModel) {
                 MaterialTheme.colorScheme.onSurface
             },
             onClick = viewModel::onUpdateRowClick,
+            modifier = Modifier.focusRequester(firstRowFocus),
         )
 
         // Read once per visit: it cannot change while the process lives, and the one
@@ -184,6 +237,111 @@ fun SettingsSection(viewModel: MainViewModel) {
                 usageTick++
             },
         )
+
+        // ---------------------------------------------------------------- 图评
+        //
+        // Four rows and one status line, in the order somebody sets them up: turn it on,
+        // say where the server is, choose how much danmaku, then read whether it worked.
+        // The status row is the reason this section exists: a television has no console,
+        // so "连不上 192.168.31.14" has to be readable from the sofa — the same reasoning
+        // as the 上次崩溃 row above.
+        Spacer(Modifier.height(18.dp))
+        SectionHeader(title = stringResource(R.string.settings_review))
+
+        ActionRow(
+            label = stringResource(R.string.settings_review),
+            value = when (reviewMode) {
+                ReviewMode.OFF -> stringResource(R.string.settings_review_off)
+                ReviewMode.SLIDESHOW -> stringResource(R.string.settings_review_slideshow)
+                ReviewMode.ALL -> stringResource(R.string.settings_review_all)
+            },
+            hint = stringResource(R.string.settings_review_hint),
+            valueColor = MaterialTheme.colorScheme.primary,
+            onClick = { viewModel.setReviewMode(reviewMode.next()) },
+        )
+
+        // A row rather than a keyboard-first form: the address is typed once per install
+        // and everything else on this screen is a single OK press, so this one keeps the
+        // same shape and opens the address field beneath itself.
+        var editingServer by remember { mutableStateOf(false) }
+        ActionRow(
+            label = stringResource(R.string.settings_review_server),
+            value = serverUrl.ifBlank { stringResource(R.string.settings_review_server_unset) },
+            hint = stringResource(R.string.settings_review_server_hint),
+            valueColor = MaterialTheme.colorScheme.primary,
+            onClick = { editingServer = !editingServer },
+        )
+        if (editingServer) {
+            TvTextField(
+                value = serverDraft,
+                onValueChange = { serverDraft = it },
+                label = stringResource(R.string.settings_review_server),
+                placeholder = "192.168.31.14:8080",
+                keyboardType = KeyboardType.Uri,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp),
+            )
+            ActionRow(
+                label = stringResource(R.string.settings_review_server),
+                value = "保存",
+                valueColor = MaterialTheme.colorScheme.primary,
+                onClick = {
+                    viewModel.setReviewServerUrl(serverDraft)
+                    editingServer = false
+                },
+            )
+        }
+
+        ActionRow(
+            label = stringResource(R.string.settings_review_scope),
+            value = when (reviewUploadScope) {
+                // Not `settings_preview_original_slideshow`: that is the *preview* row's
+                // word for its own option, and borrowing it here made this row read
+                // "仅用于幻灯片播放" — a sentence about a different setting entirely.
+                ReviewUploadScope.CURRENT -> stringResource(R.string.settings_review_scope_current)
+                ReviewUploadScope.ALL -> stringResource(R.string.settings_review_scope_all)
+            },
+            onClick = { viewModel.setReviewUploadScope(reviewUploadScope.next()) },
+        )
+
+        ActionRow(
+            label = stringResource(R.string.settings_review_extend),
+            value = if (extendStayOnComment) {
+                stringResource(R.string.settings_yes)
+            } else {
+                stringResource(R.string.settings_no)
+            },
+            hint = stringResource(R.string.settings_review_extend_hint),
+            valueColor = MaterialTheme.colorScheme.primary,
+            onClick = { viewModel.setExtendStayOnComment(!extendStayOnComment) },
+        )
+
+        // The check itself is started at the top of this composable, not here: a
+        // LaunchedEffect inside the scroll only runs when it is scrolled into view.
+        ActionRow(
+            label = stringResource(R.string.settings_review_status),
+            value = reviewStatus.label(),
+            valueColor = when (reviewStatus) {
+                is ReviewStatus.Online -> MaterialTheme.colorScheme.primary
+                is ReviewStatus.Failed -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurface
+            },
+            onClick = { viewModel.refreshReviewStatus() },
+        )
+
+        // What used to be here and is not any more, on purpose:
+        //
+        //   - the danmaku amount (关 / 少 / 多), and
+        //   - the two display switches for the code and the layer.
+        //
+        // All three moved to the viewer's 图评 button, which is where they are actually
+        // decided — while looking at a photo. That is also what took the duplicate out:
+        // 弹幕数量 existed in both places, and two rows that write the same preference are
+        // a way to change a setting in one screen and not see it in the other.
+        //
+        // What stays here is what is genuinely set up once per install: the address, what
+        // gets uploaded, the one cross-cutting timing compromise, and whether it works.
     }
 }
 

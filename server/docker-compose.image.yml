@@ -9,7 +9,7 @@ services:
   tuping:
     # 换成发布镜像的那个命名空间。镜像发布在 Docker Hub，用国内加速源可以拉。
     # 0.1.1 起服务端自己会说 HTTPS；0.1.0 及更早的镜像没有 TLS 那段代码。
-    image: kungfucode/tuping:0.1.1
+    image: kungfucode/tuping:0.1.2
     container_name: tuping
     restart: unless-stopped
     ports:
@@ -46,7 +46,7 @@ services:
       # 用它们服务。
       #
       # 但先看这一条：**0.1.0 及更早的镜像里没有 TLS 这段代码**，设了下面两个变量它们既不生效
-      # 也不报错 —— 现象就是 http 照常、https 连不上（上面 pin 的 0.1.1 有）。确认正在跑的
+      # 也不报错 —— 现象就是 http 照常、https 连不上（上面 pin 的 0.1.2 有）。确认正在跑的
       # 那个二进制认不认：
       #   docker exec tuping /usr/local/bin/tupingd -check | grep '^tls'
       # 有输出（off 或 on）就是认识；一行都没有就是太旧。

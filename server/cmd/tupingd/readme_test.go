@@ -45,7 +45,7 @@ func TestPasteBlocksStayNarrow(t *testing.T) {
 }
 
 // TestPasteBlocksQuoteTheirValues is the other half. A quoted scalar is treated as one unit by
-// whatever re-wraps the text, so `"kungfucode/tuping:0.1.1"` and `"unless-stopped"` come through
+// whatever re-wraps the text, so `"kungfucode/tuping:0.1.2"` and `"unless-stopped"` come through
 // the copy path that split their unquoted forms.
 func TestPasteBlocksQuoteTheirValues(t *testing.T) {
 	entry := regexp.MustCompile(pasteEntry)

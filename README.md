@@ -174,7 +174,7 @@ Dockerfile、也不用在同一个目录里凑文件。
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.1"
+    image: "kungfucode/tuping:0.1.2"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -190,7 +190,7 @@ services:
 `docker exec tuping …` 用的是这个名字）。
 
 > **这段每行都很短、每个值都带引号，是有意的**：从渲染过的页面复制时，有些工具会按窗口宽度重排长行，
-> 而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.1` 会变成两行、
+> 而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.2` 会变成两行、
 > `unless-stopped` 会变成 `unless-` + `stopped`，整段就解析失败（报错通常是 `expected <block end>`）。
 > 引号里的内容不会被拆，所以值一律加引号。粘完扫一眼，被拆开了就把值接回冒号后面那一行。不想冒这个险
 > 就别粘：用文件管理把 [`server/docker-compose.image.yml`](server/docker-compose.image.yml) 传进一个
@@ -200,7 +200,7 @@ services:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.1
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.2
 ```
 
 | 变量 | 填什么 |
@@ -216,7 +216,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 > **前提：镜像是包含这个特性的那一版。** 这个特性是 **0.1.1** 才有的：更早的镜像（包括
 > `kungfucode/tuping:0.1.0`）**没有** TLS 支持，设了这两个变量它既不生效、也不报错，现象就是
 > **http 照常、https 连不上**（用 https 连一个说明文的端口，会得到一个 400）。上面 compose 里
-> pin 的就是 0.1.1；手上是更早的镜像就换 tag，或者走**自己构建镜像**那条路。
+> pin 的就是 0.1.2；手上是更早的镜像就换 tag，或者走**自己构建镜像**那条路。
 > 30 秒确认正在跑的那个二进制认不认（`docker exec` 要能 SSH；不想 SSH 就看面板日志里
 > `tupingd listening` 那行有没有 `tls=` 字段）：
 >
@@ -258,7 +258,7 @@ https。几件顺带的事：cookie 自动带上 `Secure`、页面和二维码�
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.1",...}`。
+2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.2",...}`。
 3. **进管理页**：手机打开 `http://<NAS 地址>:8080/admin`，用第 2 步那个口令登录，能看到审核队列就好。
 
 然后电视：设置里「图评服务器」填**同一个地址**（`http://192.168.31.14:8080` 这种，手机也得能打开它），
@@ -272,10 +272,10 @@ https。几件顺带的事：cookie 自动带上 `Secure`、页面和二维码�
 | 容器反复重启，日志 `unable to open database file` | 数据目录的属主和容器里的 uid 对不上。镜像自己会处理（以 root 起步、接管 `data/` 属主、随即降为 uid 10001），所以正常情况下不会出现；只有挂载在 SMB/CIFS 这类不支持 `chown` 的地方，才需要给服务加一行 `user: "0:0"`。 |
 | 起不来，`port is already allocated` | 8080 被别的容器占了：把 `"8080:8080"` 左边改掉（例如 `"8090:8080"`），电视和手机上用的地址也要跟着带端口。 |
 | 二维码扫了打不开 | 二维码里的地址是电视上报的：先在电视上确认那行地址**手机也能打开**（同局域网、端口对得上），然后在电视上重新注册这张照片。 |
-| 配了 HTTPS，但 http 照常、https 连不上 | 按顺序查两件事：① 在容器里跑 `/usr/local/bin/tupingd -check`，**输出里根本没有 `tls` 那一行** = 这个二进制不认识 TLS（`kungfucode/tuping:0.1.0` 及更早就是，0.1.1 起才有），把镜像 tag 换成 0.1.1 或自己构建；② 有 `tls` 却仍是 `off`／日志那行是 `tls=false` = 环境变量没进容器：改完 compose 必须点**「启动 / 重新部署」**，只点「重启」不算。 |
+| 配了 HTTPS，但 http 照常、https 连不上 | 按顺序查两件事：① 在容器里跑 `/usr/local/bin/tupingd -check`，**输出里根本没有 `tls` 那一行** = 这个二进制不认识 TLS（`kungfucode/tuping:0.1.0` 及更早就是，0.1.1 起才有），把镜像 tag 换成 0.1.2 或自己构建；② 有 `tls` 却仍是 `off`／日志那行是 `tls=false` = 环境变量没进容器：改完 compose 必须点**「启动 / 重新部署」**，只点「重启」不算。 |
 | 配了 HTTPS，二维码却还是 `http://…` | 那张照片是电视用 http 注册的：把电视上的「图评服务器」改成 `https://…` 再注册一次，或者在 compose 里钉 `TUPING_BASE_URL: "https://你的域名"`。 |
 | 配了 HTTPS 之后容器一直 unhealthy | 旧 compose 里那句健康检查是 `wget http://127.0.0.1:8080/healthz`，TLS 下必然失败 —— 服务没坏。换成二进制自己的探针：`test: ["CMD", "/usr/local/bin/tupingd", "-health"]`。 |
-| 页面上写「发得太快了，歇一会儿」（HTTP 429） | **限流生效了，不是故障。** 发评论这一个端点有额度：每个访客 5 条/分、50 条/天，每个 IP 30 条/分，每张图 200 条/小时，以及整个端点 120 条/分（最后这道不看来源，是前三道都能靠换 cookie／换 IP／换图片绕开之后补的 —— 它比 0.1.1 的镜像新，**自建的镜像会带上，Docker Hub 上的 0.1.2 起才有**）。等一分钟、或换一张照片就恢复；全表与理由在 [`docs/tuping-design.md`](docs/tuping-design.md) §7。 |
+| 页面上写「发得太快了，歇一会儿」（HTTP 429） | **限流生效了，不是故障。** 发评论这一个端点有额度：每个访客 5 条/分、50 条/天，每个 IP 30 条/分，每张图 200 条/小时，以及整个端点 120 条/分（最后这道不看来源，是前三道都能靠换 cookie／换 IP／换图片绕开之后补的）。等一分钟、或换一张照片就恢复；全表与理由在 [`docs/tuping-design.md`](docs/tuping-design.md) §7。 |
 | 电视上扫码提示「这张照片不在图评里」，而电视明明有一张看着正常的码 | 电视上那张码是**上一台服务器**签发的 —— 服务端重装、换了 `data/` 目录、或恢复到一个更早的备份之后，它签发的短码和新库里的一切都对不上。1.4.11 起应用会自己走出来（拒绝的令牌会让它丢掉旧服务器的全部回答并重新注册屏幕上那张），更早的版本重启一次应用即可。想让评论不丢就不要换 `data/` 目录。 |
 
 ### 升级 / 备份 / 卸载
@@ -293,7 +293,7 @@ NAS 出不了外网、或者你想改 Dockerfile / 改代码，就走这一条�
 目录，在面板里点「构建 → 启动」（[`dist/`](server/README.md) 里或 release 附件里）：
 
 ```powershell
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.1
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.2
 ```
 
 ```
@@ -442,7 +442,7 @@ docs/tuping-design.md    图评的协议与决策，唯一真相源
 
 18. **换了一台服务器之后，屏幕上那张码会自己换掉** —— 报告来自真机（"我构建了新的 server 端，扫码后提示这张照片不在图片数据库里"，H5 页的原话是 **这张照片不在图评里**），而根因是用**那台服务器自己的回答**定位的：它的 `/healthz` 是 `uptimeSec:331` / `thumbBytes:0`（缩略图目录空的）；电视日志在 11:52:46 —— 与新服务器起来的时刻同一分钟 —— 写着 `does not accept this device's token; registering again` 紧跟 `live socket closed: … '404 Not Found'`；而电视缓存里那两个短码对着新服务器取回来都是 **404**。也就是说它重新注册了**设备**，一张照片都没重新注册，因为 1.4.2 那道修复按设计保留了照片侧的身份，理由是"重新注册后同一张照片会回到同一个身份"—— 这句话只在服务器**还持有那些行**的时候成立，而那道修复存在的理由恰恰是它不持有。修完之后在 **Android TV 模拟器**上对着 `tools/mock-review` 走完了整个换服务器过程：对着 mock 注册出一张码（`vloRGE`，`GET /c/vloRGE` → **200**）→ **杀掉 mock、换成一个空的重启**（`uptimeSec:5`、`thumbBytes:0`，`vloRGE` → **404**，报告的现场复现）→ 回到网格再打开同一张照片，日志依次是 `does not accept this device's token; registering again` → `issued a new device; forgetting its old answers` → `registering 1002 again; its code came from the old server`，磁盘上那张旧码被删掉、换成了新码（`WEAC5P` → 新 mock 上 **200**，`vloRGE` 仍是 404）。同一轮里"历史读回 `not_found`"那条自愈也自己触发了（`the server does not hold 006GJPZ9…; registering it again`）。离开设备的那一半是 `ReviewRecoveryTest` 6 条：一次修复**只报告一次**"服务器被换掉了"、掉包不算拒绝、领不到设备的拒绝不算换服务器、两个调用同时被拒只领一个设备、`not_found` 是"服务器没有这张照片"、其余协议回答都不是。根因、取舍与一处刻意的顺序（只有屏幕上有码时才重注册）写在 [docs/tuping-design.md](docs/tuping-design.md) 的 §17.24。
 
-19. **发评论端点自己的额度：120 条/分** —— 服务端单测 `TestCommentBudgetIsWholeService`。§7 原本三档按调用方算的额度都能靠换 cookie／换 IP／换图片绕开，所以端点本身要有一道不看来源的上限。测试是唯一能看见它的形状：五个回环源地址（各 30 条/分的 IP 额度）加每条请求换一个 `anonId`（各 5 条/分），谁都没有超自己的线，端点仍然在第 121 条上拒绝。变异检查做过 —— 把 handler 里那一行注释掉，同一份测试报 `the endpoint took 122 comments, want exactly 120` 并失败。取舍写在 §17.25。
+19. **发评论端点自己的额度：120 条/分** —— 服务端单测 `TestCommentBudgetIsWholeService`。§7 原本三档按调用方算的额度都能靠换 cookie／换 IP／换图片绕开，所以端点本身要有一道不看来源的上限。测试是唯一能看见它的形状：五个回环源地址（各 30 条/分的 IP 额度）加每条请求换一个 `anonId`（各 5 条/分），谁都没有超自己的线，端点仍然在第 121 条上拒绝。变异检查做过 —— 把 handler 里那一行注释掉，同一份测试报 `the endpoint took 122 comments, want exactly 120` 并失败。**发出去的二进制也量过，不只是源码**：`server-v0.1.2` 那个 release 里的 `tupingd-linux-amd64` 在 WSL 里跑起来（`-version` → `0.1.2`，监听日志也是 `version=0.1.2`），再从 WSL **内部**用五个回环源地址发 122 条评论 —— 窗口里恰好 **120 条 200、2 条 429**，被拒的那条读作 `{"error":{"code":"rate_limited","message":"发得太快了，歇一会儿"}}`。这一步一开始是在 Windows 上做的，结果只到 36 条：Windows 到 WSL 的 localhost 转发会把连接重开成 127.0.0.1，五个源地址变成一个，先撞上的是每 IP 30 条/分 —— 测量工具本身把被测对象挡住了，这才是"从 WSL 内部发"的原因。取舍写在 §17.25。
 
 有两个 bug 只有按用户真正会用的方式去测才发现：
 

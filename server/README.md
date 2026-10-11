@@ -24,7 +24,7 @@
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.1"
+    image: "kungfucode/tuping:0.1.2"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -42,7 +42,7 @@ services:
 里面）。
 
 > 这一段**每行都很短、每个值都带引号**，两件事都是有意的：从渲染过的网页复制时，有些工具会按窗口宽度
-> 重排长行，而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.1` 会变成两行、
+> 重排长行，而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.2` 会变成两行、
 > `unless-stopped` 会变成 `unless-` + `stopped`，整段就解析失败（报错通常在 `expected <block end>` 附近）。
 > 引号里的内容不会被拆，所以值一律加引号。粘完还是扫一眼：如果某行被拆开了，把值接回冒号后面那一行即可。
 > 不想冒这个险就别粘 —— 用文件管理把 [`docker-compose.image.yml`](docker-compose.image.yml) 传进一个
@@ -52,7 +52,7 @@ services:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.1
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.2
 ```
 
 | 变量 | 填什么 |
@@ -68,7 +68,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 
 ```sh
 curl http://192.168.31.14:8080/healthz
-# {"baseUrl":"","baseUrlSource":"the address each caller used","ok":true,"version":"0.1.1","uptimeSec":3,"thumbBytes":0}
+# {"baseUrl":"","baseUrlSource":"the address each caller used","ok":true,"version":"0.1.2","uptimeSec":3,"thumbBytes":0}
 ```
 
 `baseUrl` 是空的，因为没钉地址——`baseUrlSource` 就是说明这件事的字段。钉过的话它会是
@@ -174,7 +174,7 @@ powershell -File tools/setup-go.ps1
 powershell -File tools/tuping.ps1 -Tasks build,test
 
 # 两个架构的发布二进制 + Dockerfile + 两份 compose + .dockerignore + 本文件，一起进 dist/
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.1
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.2
 
 # 在开发机上直接跑，不需要 Docker 也不需要 NAS
 powershell -File tools/tuping.ps1 -Tasks run -BaseUrl http://192.168.31.20:8080
@@ -226,8 +226,8 @@ powershell -File tools/tuping.ps1 -Tasks deploy -NasHost 192.168.31.14
 
 > **前提：跑着一个认识这两个变量的二进制。** 这个特性是 **0.1.1** 才有的：更早的镜像（包括
 > `kungfucode/tuping:0.1.0`）里没有这段代码，设了 `TUPING_TLS_CERT/KEY` 它**既不生效、也不报错**
-> —— 端口照旧说明文 http，手机用 https 连过去只会得到一个 400。上面那份 compose pin 的就是 0.1.1；
-> 如果你手上是更早的镜像，换成 0.1.1 或更新，要么走上面的**自己构建镜像**。
+> —— 端口照旧说明文 http，手机用 https 连过去只会得到一个 400。上面那份 compose pin 的就是 0.1.2；
+> 如果你手上是更早的镜像，换成 0.1.2 或更新，要么走上面的**自己构建镜像**。
 >
 > 两条命令就能确认正在跑的那个二进制认不认（第一条要能 SSH，第二条只要看面板日志）：
 >
@@ -395,7 +395,7 @@ rsync -a /vol1/docker/tuping/data/secret /vol1/backup/tuping-secret
 
 同一句话的另一面：**「图片域」是「同一个实例内的同一张图共享」**，不是跨实例共享。你自己部署的这一份，评论只在你自己的库，别人部署的那一份看不到，换地址就是从零开始。
 
-**限流是有的，但它不是账号体系。** 发评论这一个端点带四道额度：每个访客 5 条/分、50 条/天，每个 IP 30 条/分，每张图 200 条/小时，以及**整个端点 120 条/分**（2026-10-11 加的那一道：前三道都能靠换 cookie／换 IP／换图片绕开，所以端点本身要有一个不看来源的上限；这一道比 0.1.1 的镜像新，自建的镜像会带上，Docker Hub 上 0.1.2 起才有）。全表与理由在 [`docs/tuping-design.md`](../docs/tuping-design.md) §7；被拦下的回答是 `429` 加一句「发得太快了，歇一会儿」。它挡的是刷屏和脚本，不是"谁能看"。
+**限流是有的，但它不是账号体系。** 发评论这一个端点带四道额度：每个访客 5 条/分、50 条/天，每个 IP 30 条/分，每张图 200 条/小时，以及**整个端点 120 条/分**（2026-10-11 加的那一道：前三道都能靠换 cookie／换 IP／换图片绕开，所以端点本身要有一个不看来源的上限；随 **0.1.2** 的镜像发出，也在 0.1.2 的二进制上量过 —— 五个源地址、每条换一个访客，恰好 120 条 200、第 121 条起 429）。全表与理由在 [`docs/tuping-design.md`](../docs/tuping-design.md) §7；被拦下的回答是 `429` 加一句「发得太快了，歇一会儿」。它挡的是刷屏和脚本，不是"谁能看"。
 
 ---
 
@@ -411,4 +411,4 @@ internal/store/     SQLite、迁移、身份匹配、可逆合并
 internal/web/       H5 评论页 + 登录页 + 编辑页（go:embed 进同一个二进制）
 ```
 
-服务端与相册端在同一个仓库（设计 D6），所以协议一改，协议文档、TV 端、服务端和 mock 可以在一次提交里一起改。两边的版本号是**故意不对齐**的：APK 写在 `app/build.gradle.kts`，服务端由 `-ldflags -X` 注入，tag 用 `app-v1.4.0` / `server-v0.1.1` 区分。
+服务端与相册端在同一个仓库（设计 D6），所以协议一改，协议文档、TV 端、服务端和 mock 可以在一次提交里一起改。两边的版本号是**故意不对齐**的：APK 写在 `app/build.gradle.kts`，服务端由 `-ldflags -X` 注入，tag 用 `v1.4.11` / `server-v0.1.2` 区分。

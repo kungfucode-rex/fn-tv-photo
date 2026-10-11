@@ -519,7 +519,7 @@ pulls):
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.1"
+    image: "kungfucode/tuping:0.1.2"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -536,7 +536,7 @@ container simply `tuping` (the `docker exec tuping …` commands below use that 
 
 > **Every line above is short and every value is quoted, on purpose.** When text is copied out of a rendered
 > page, some tools re-wrap long lines to the window width and break **unquoted** values at `:` and `-` —
-> `kungfucode/tuping:0.1.1` comes out as two lines and `unless-stopped` as `unless-` plus `stopped`, and the
+> `kungfucode/tuping:0.1.2` comes out as two lines and `unless-stopped` as `unless-` plus `stopped`, and the
 > whole block fails to parse (usually with `expected <block end>`). Quoted text is not broken, so the values
 > are all quoted. After pasting, glance at the lines and join any that were split. If you would rather not
 > risk it, do not paste at all: copy [`server/docker-compose.image.yml`](server/docker-compose.image.yml) into
@@ -546,7 +546,7 @@ Without Compose, the same thing as one command:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your password' kungfucode/tuping:0.1.1
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your password' kungfucode/tuping:0.1.2
 ```
 
 | Variable | What to put there |
@@ -563,7 +563,7 @@ comes from anyway, reported by the television. The same file with every option c
 > **First: the image has to be one that has this.** TLS arrived in **0.1.1**; earlier images (including
 > `kungfucode/tuping:0.1.0`) **have no TLS support at all**, so setting these two variables does nothing and
 > says nothing — the symptom is exactly **http keeps working and https does not** (an https request to a
-> cleartext port gets a 400). The compose above pins 0.1.1; if you are on something older, move the tag or take
+> cleartext port gets a 400). The compose above pins 0.1.2; if you are on something older, move the tag or take
 > the **build the image yourself** path. Thirty seconds tells you which binary you are running (`docker exec`
 > needs SSH; without it, look for a `tls=` field on the `tupingd listening` line in the panel's log):
 >
@@ -611,7 +611,7 @@ certificate, so a green padlock means a real one. The full detail is the **HTTPS
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **Ask the server.** `curl http://<nas>:8080/healthz` → `{"ok":true,"version":"0.1.1",...}`.
+2. **Ask the server.** `curl http://<nas>:8080/healthz` → `{"ok":true,"version":"0.1.2",...}`.
 3. **Open the admin page.** On a phone, `http://<nas>:8080/admin`, log in with the password from step 2;
    seeing the moderation queue means everything works.
 
@@ -628,9 +628,9 @@ writes a comment; the comment floats across the screen.
 | `port is already allocated` | 8080 is taken by another container: change the left side of `"8080:8080"` (say `"8090:8080"`) and use that port everywhere, including the television. |
 | The QR code scans into nothing | The address inside it is the one the television reported: check that the address in the television's own row is one the *phone* can open (same LAN, right port), then register the photo again from the television. |
 | HTTPS is on but the QR code still says `http://…` | That photo was registered by a television still using http: change its **图评服务器** row to `https://…` and register again, or pin `TUPING_BASE_URL: "https://your.domain"` in the compose file. |
-| HTTPS configured, but http still works and https does not | Two things, in this order: ① `/usr/local/bin/tupingd -check` inside the container printing **no `tls` line at all** means this binary does not know about TLS (`kungfucode/tuping:0.1.0` and earlier; 0.1.1 is the first with it) — move the tag to 0.1.1 or build it yourself; ② a `tls = off` line, or `tls=false` on the listening log line, means the variables never reached the container: after editing the compose file you must press **Start / redeploy**, not **Restart**. |
+| HTTPS configured, but http still works and https does not | Two things, in this order: ① `/usr/local/bin/tupingd -check` inside the container printing **no `tls` line at all** means this binary does not know about TLS (`kungfucode/tuping:0.1.0` and earlier; 0.1.1 is the first with it) — move the tag to 0.1.2 or build it yourself; ② a `tls = off` line, or `tls=false` on the listening log line, means the variables never reached the container: after editing the compose file you must press **Start / redeploy**, not **Restart**. |
 | The container stays unhealthy after enabling HTTPS | The old compose file's health check is `wget http://127.0.0.1:8080/healthz`, which cannot work over TLS — the service is fine. Switch to the binary's own probe: `test: ["CMD", "/usr/local/bin/tupingd", "-health"]`. |
-| The page says 发得太快了，歇一会儿 (HTTP 429) | **That is the rate limit working, not a fault.** Creating a comment carries budgets: 5/min and 50/day per guest, 30/min per IP, 200/hour per photo, and 120/min for the endpoint as a whole — the last one ignores where the request came from, and it exists because the other three can all be evaded by arriving as somebody new. It is newer than the 0.1.1 image: **an image you build yourself carries it, and Docker Hub has it from 0.1.2**. Wait a minute, or use another photo; the table and the reasoning are in [`docs/tuping-design.md`](docs/tuping-design.md) §7. |
+| The page says 发得太快了，歇一会儿 (HTTP 429) | **That is the rate limit working, not a fault.** Creating a comment carries budgets: 5/min and 50/day per guest, 30/min per IP, 200/hour per photo, and 120/min for the endpoint as a whole — the last one ignores where the request came from, and it exists because the other three can all be evaded by arriving as somebody new. Wait a minute, or use another photo; the table and the reasoning are in [`docs/tuping-design.md`](docs/tuping-design.md) §7. |
 | A scanned code says 这张照片不在图评里 while the television shows a code that looks fine | That code was issued by the **previous** server: after a reinstall, a different `data/` directory, or a restore from an older backup, the short codes it minted match nothing in the new database. From 1.4.11 the app gets out of this by itself (a refused token makes it drop the old server's answers and register the photo on screen again); on anything earlier, restart the app. To keep the comments, do not change the `data/` directory. |
 
 ### Upgrading, backing up, removing
@@ -650,7 +650,7 @@ the NAS instead: four files in **one directory**, then **Build** and **Start** i
 `dist/`, or from the release attachments):
 
 ```powershell
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.1
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.2
 ```
 
 ```
@@ -1047,8 +1047,15 @@ verification was built deliberately:
     The test is the only shape in which that ceiling can be seen: five loopback source addresses (30/min
     each) with a fresh `anonId` per request (5/min each), nobody over their own limit, and the endpoint
     still refusing the 121st comment. A mutation check was run: commenting out that one line in the
-    handler makes the same test fail with `the endpoint took 122 comments, want exactly 120`. The
-    tradeoffs are in §17.25.
+    handler makes the same test fail with `the endpoint took 122 comments, want exactly 120`. **The shipped
+    binary was measured too, not just the source**: the `tupingd-linux-amd64` attached to `server-v0.1.2` was
+    run under WSL (`-version` → `0.1.2`, and `version=0.1.2` on the listening line), and 122 comment creations
+    went out from **inside** WSL over five loopback source addresses — exactly **120 answered 200 and two
+    answered 429**, the refusal reading `{"error":{"code":"rate_limited","message":"发得太快了，歇一会儿"}}`.
+    The first attempt was made from Windows and stopped at 36: the Windows-to-WSL localhost forwarder reopens
+    every connection as 127.0.0.1, so the five addresses collapse into one and the per-IP budget (30/min) binds
+    first — the instrument was hiding the thing being measured, which is why it has to be sent from inside.
+    The tradeoffs are in §17.25.
 
 Two bugs were found only by testing the way a user actually would:
 

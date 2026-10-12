@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -35,6 +38,7 @@ import com.tvphoto.domain.PhotoStats
 import com.tvphoto.ui.HomeSection
 import com.tvphoto.ui.MainViewModel
 import com.tvphoto.ui.PositionKeys
+import com.tvphoto.ui.UpdateState
 import com.tvphoto.ui.components.FocusableSurface
 
 @Composable
@@ -42,7 +46,13 @@ fun HomeScreen(viewModel: MainViewModel) {
     val section by viewModel.section.collectAsStateWithLifecycle()
     val stats by viewModel.stats.collectAsStateWithLifecycle()
     val sessionState by viewModel.sessionState.collectAsStateWithLifecycle()
+    val update by viewModel.update.collectAsStateWithLifecycle()
     val server = (sessionState as? SessionState.SignedIn)?.session?.baseUrl.orEmpty()
+
+    // The one thing the rail has to say about a screen the user is not looking at: there is
+    // a newer build to install, and it is behind 设置. Asked for at start-up by the view
+    // model, so the dot is there for somebody who never opens that page.
+    val settingsBadge = update is UpdateState.Available
 
     Row(
         modifier = Modifier
@@ -55,6 +65,7 @@ fun HomeScreen(viewModel: MainViewModel) {
             server = server,
             stats = stats,
             onSignOut = viewModel::signOut,
+            badgeOnSettings = settingsBadge,
             // Claim focus only when this section's list has no remembered position.
             // Otherwise returning from a photo grid would yank focus back to the
             // rail instead of landing where the user left off.
@@ -85,6 +96,7 @@ private fun NavRail(
     server: String,
     stats: PhotoStats?,
     onSignOut: () -> Unit,
+    badgeOnSettings: Boolean,
     shouldClaimFocus: Boolean,
 ) {
     val selectedFocus = remember { FocusRequester() }
@@ -123,6 +135,7 @@ private fun NavRail(
             NavItem(
                 label = label,
                 selected = target == current,
+                badge = target == HomeSection.Settings && badgeOnSettings,
                 onClick = { onSelect(target) },
                 modifier = if (target == current) Modifier.focusRequester(selectedFocus) else Modifier,
             )
@@ -174,6 +187,7 @@ private fun NavItem(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    badge: Boolean = false,
 ) {
     FocusableSurface(
         onClick = onClick,
@@ -211,6 +225,29 @@ private fun NavItem(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
             )
+            if (badge) UpdateDot()
         }
     }
 }
+
+/**
+ * The red dot on the 设置 entry: a newer build exists.
+ *
+ * A dot rather than the version number, and on the rail rather than only on the row that
+ * does the checking, for the same reason the update row exists at all: on a television
+ * there is no notification and no badge on a launcher icon, so a release nobody is told
+ * about is a release nobody installs. It carries no text on purpose — it is read from
+ * across a room, where one dot is legible and "1.4.12" is not.
+ */
+@Composable
+private fun UpdateDot() {
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(UpdateDotColor),
+    )
+}
+
+/** Red rather than the theme's error colour: an available update is good news, not a fault. */
+private val UpdateDotColor = Color(0xFFE5484D)

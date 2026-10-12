@@ -19,6 +19,12 @@
     <string name="login_restoring">Signing in…</string>
     <string name="login_restoring_hint">Signing in with the saved account</string>
     <string name="login_restoring_slow">Taking a while — press back to use another account</string>
+    <!-- Shown when the token the app was using went stale — the NAS retired it while the
+         app sat idle — and it is logging in again by itself. No back key here: there is
+         nothing useful behind it, and the login form appears by itself if this fails. -->
+    <string name="login_recovering">Reconnecting…</string>
+    <string name="login_recovering_hint">The session expired, signing in again</string>
+    <string name="login_recovering_slow">Still reconnecting — the NAS may be waking up or unreachable</string>
     <string name="login_remember">Saved accounts (use up/down, press OK to sign in)</string>
     <string name="login_failed">Sign-in failed</string>
     <string name="host_required">Enter your fnOS device address</string>
@@ -90,8 +96,60 @@
     <string name="viewer_music_count">%1$d tracks</string>
     <string name="viewer_music_hint">Up/down to choose · OK to tick · Back to close</string>
 
-    <!-- Settings -->
+    <!-- Music library. See the note on the Chinese file: the viewer's track list gained two
+         headings and one way in, and the rest belongs to the screen that way in opens. -->
+    <string name="music_counts">Bundled %1$d · Mine %2$d</string>
+    <string name="music_viewer_manage">＋ Upload / manage background music…</string>
+    <string name="music_page_hint">OK selects or unselects; hold OK for sort and delete, then pick one with left/right. While sorting, up/down move the track and OK or Back confirms.</string>
+    <string name="music_page_empty">Nothing here yet — upload from a phone with the code on the left, or copy a file into the library folder.</string>
+    <string name="music_directory">Library folder</string>
+    <string name="music_directory_hint">Uploads land here; files copied in with a cable or a file manager count too.</string>
+    <string name="music_restore_builtin">Restore bundled tracks</string>
+    <string name="music_restore_builtin_hint">Puts the bundled tracks you deleted back at the end of the list. Their files are inside the app, so deleting one only takes it out of the list.</string>
+    <string name="music_restore_builtin_done">Bundled tracks restored</string>
+    <string name="music_row_sort">Sort</string>
+    <string name="music_row_delete">Delete</string>
+    <string name="music_upload_step_1">1. Join the phone to the same Wi-Fi as the TV</string>
+    <string name="music_upload_step_2">2. Scan the code, or type the address above into a browser</string>
+    <string name="music_upload_step_3">3. Pick mp3 files; each one lands at the top on the right</string>
+    <string name="settings_music_upload">Upload background music</string>
+    <string name="settings_music_upload_value">Scan a code</string>
+    <string name="settings_music_upload_hint">Send songs from a phone by scanning the code; the library folder is printed on the page, and a file copied in there works the same.</string>
+    <string name="music_usage">In use</string>
+    <string name="music_usage_value">%1$s used / %2$s</string>
+    <string name="music_deleted">Deleted %1$s</string>
+    <string name="music_clear">Clear my music</string>
+    <string name="music_clear_value">%1$d uploaded</string>
+    <string name="music_clear_hint">Deletes the files in the library folder, including any copied in. The bundled track is untouched.</string>
+    <string name="music_cleared">Uploaded music cleared</string>
+    <string name="music_ticked">selected</string>
+    <string name="music_source_builtin">Bundled</string>
+    <string name="music_source_upload">Uploaded</string>
+    <string name="music_upload_title">Upload background music</string>
+    <string name="music_upload_preparing">Getting ready…</string>
+    <string name="music_upload_no_address">Could not read this television address on the network. Check that the TV is online, then go back and open this page again.</string>
+    <string name="music_upload_qr_description">QR code for the upload page</string>
+    <string name="music_upload_received">%1$d received · %2$s</string>
+    <string name="music_upload_stay">Stay on this page while uploading; if the code will not open, check that the phone is on the same Wi-Fi and the router has no AP isolation.</string>
+    <string name="music_upload_fail_too_large">too big, skipped</string>
+    <string name="music_upload_fail_not_audio">not audio, skipped</string>
+    <string name="music_upload_fail_library_full">library is full</string>
+    <string name="music_upload_fail_no_space">no space on the TV</string>
+    <string name="music_upload_fail_failed">upload failed</string>
+
+    <!-- Settings. One pane per sub-menu entry on the left, because the whole page had
+         grown taller than a 1080p screen: a scrolling column with twenty rows in it is a
+         page nobody can find anything on, and the rows a person actually came for were
+         scattered down it by whatever order they happened to be added in. -->
     <string name="settings_title">Settings</string>
+    <string name="settings_submenu_hint">Up/down to pick a category, right to open it</string>
+    <string name="settings_pane_version">Updates</string>
+    <string name="settings_pane_general">General</string>
+    <string name="settings_pane_slideshow">Slideshow</string>
+    <string name="settings_pane_review">Photo review</string>
+    <string name="settings_update_caption">Check whether a newer build exists, and install it here.</string>
+    <string name="settings_version_hint">The build installed on this device.</string>
+    <string name="settings_general_caption">Theme, preview quality, cache, and how this device is connected.</string>
     <string name="settings_server">Server</string>
     <string name="settings_account">Account</string>
     <string name="settings_version">Version</string>
@@ -105,12 +163,36 @@
     <string name="settings_preview_original_no">No</string>
     <string name="settings_preview_original_slideshow">Slideshow only</string>
     <string name="settings_preview_original_hint">Originals are sharper; large thumbnails load faster and use less data.</string>
+    <string name="settings_preview_original_global_hint">Originals or large thumbnails when viewing a photo.</string>
     <string name="settings_cache">Clear image cache</string>
     <string name="settings_cache_cleared">Cache cleared</string>
     <string name="settings_cache_usage">%1$s of %2$s</string>
     <string name="settings_cache_measuring">Reading…</string>
     <string name="settings_last_crash">Last crash</string>
     <string name="settings_crash_none">None</string>
+
+    <!-- Screensaver album. One album, chosen from a list in Settings → General, played as a
+         slideshow once nobody has touched the remote for a while. The list holds every album
+         the account can see, its own and the ones shared with it, because a television
+         choosing what to play in a room is not asking who owns the album. -->
+    <string name="settings_screen_saver">Screensaver album</string>
+    <string name="settings_screen_saver_hint">Plays this album full screen, on a loop, when nothing is touched for a while. Any key returns to what was on screen.</string>
+    <string name="screen_saver_unset">Not set</string>
+    <string name="screen_saver_badge">Screensaver</string>
+    <string name="screen_saver_pick_title">Choose a screensaver album</string>
+    <string name="screen_saver_pick_hint">Up/down to choose, OK to confirm, Back to cancel</string>
+    <string name="screen_saver_pick_empty">There are no albums to use yet</string>
+    <string name="screen_saver_none">None</string>
+    <string name="screen_saver_none_hint">Turn the screensaver album off</string>
+
+    <!-- Slideshow. The same preferences the viewer's 幻灯片 row edits - one interval and one
+         order, two doors. The viewer is where they are usually changed, but a slideshow is
+         often set up before anyone is looking at a photo, and reaching that row means
+         opening a picture and pressing 幻灯片 first. -->
+    <string name="settings_slideshow_interval_hint">How long each photo stays on screen.</string>
+    <string name="settings_slideshow_order_hint">In order walks the list; shuffle draws from every photo. A show only ever plays photos — videos are stepped over.</string>
+    <string name="settings_slideshow_music">Background music</string>
+    <string name="settings_slideshow_same_hint">The same value as the 幻灯片 control bar in the viewer; changing it in either place changes both.</string>
 
     <!-- Update check. Every value here is a state of one row, because a television has
          no second way in: no dialog to dismiss and nothing that can be typed. -->
@@ -119,6 +201,7 @@
     <string name="settings_update_checking">Checking…</string>
     <string name="settings_update_up_to_date">Up to date</string>
     <string name="settings_update_available">Version %1$s available</string>
+    <string name="settings_update_badge_hint">There is a red dot on 设置 in the main menu.</string>
     <string name="settings_update_downloading">Downloading %1$d%%</string>
     <string name="settings_update_needs_permission">Permission needed</string>
     <string name="settings_update_ready">Downloaded</string>
@@ -142,8 +225,9 @@
     <string name="settings_review_all">Everything</string>
     <string name="settings_review_hint">A QR code appears on the TV; guests scan it and their comments drift across the photo.</string>
     <string name="settings_review_server">Review server</string>
+    <string name="settings_review_server_save">Save</string>
     <string name="settings_review_server_unset">Not set</string>
-    <string name="settings_review_server_hint">An address a phone can reach, e.g. 192.168.31.14:8080, or https://… if the server has a certificate. Blank turns photo review off.</string>
+    <string name="settings_review_server_hint">The server that collects photo comments.</string>
     <string name="settings_review_status">Review connection</string>
     <string name="settings_review_scope">Upload scope</string>
     <string name="settings_review_scope_current">This album</string>

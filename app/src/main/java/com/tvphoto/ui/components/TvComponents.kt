@@ -40,6 +40,10 @@ import androidx.tv.material3.Text
  * Enter onto `onClick`, so this only adds the visual response to focus. The node
  * is scaled rather than merely outlined because on a TV, viewed from across a
  * room, size reads far better than a thin border.
+ *
+ * [onFocus] is off by default, and only for the places where the thing a cursor lands on is
+ * itself the choice — the settings sub-menu, whose pane swaps as the cursor moves. Everywhere
+ * else a card is a thing to press, so gaining focus must not act.
  */
 @Composable
 fun FocusableSurface(
@@ -49,6 +53,7 @@ fun FocusableSurface(
     focusedScale: Float = 1.05f,
     containerColor: Color = MaterialTheme.colorScheme.surface,
     focusedContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    onFocus: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -70,7 +75,10 @@ fun FocusableSurface(
                 scaleX = scale.value
                 scaleY = scale.value
             }
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus?.invoke()
+            }
             .clip(shape)
             .background(if (focused) focusedContainerColor else containerColor)
             .border(

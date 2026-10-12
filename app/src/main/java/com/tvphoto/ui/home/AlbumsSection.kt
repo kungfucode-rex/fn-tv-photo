@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
@@ -30,10 +31,12 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.tvphoto.R
+import com.tvphoto.data.isScreenSaverAlbum
 import com.tvphoto.domain.AlbumItem
 import com.tvphoto.ui.ContentState
 import com.tvphoto.ui.MainViewModel
 import com.tvphoto.ui.PositionKeys
+import com.tvphoto.ui.components.Badge
 import com.tvphoto.ui.components.FocusableSurface
 import com.tvphoto.ui.components.RetryButton
 import com.tvphoto.ui.components.SectionHeader
@@ -44,6 +47,9 @@ import com.tvphoto.ui.rememberPositionMemory
 @Composable
 fun AlbumsSection(viewModel: MainViewModel) {
     val state by viewModel.albums.collectAsStateWithLifecycle()
+    // Only to mark the card of whichever album plays itself; the album is *chosen* in 设置,
+    // where every album is in one list (see the 屏保相册 row), so nothing here writes it.
+    val screenSaverId by viewModel.screenSaverAlbumId.collectAsStateWithLifecycle()
     val memory = rememberPositionMemory(PositionKeys.ALBUMS, viewModel)
     val gridState = rememberLazyGridState()
 
@@ -93,6 +99,7 @@ fun AlbumsSection(viewModel: MainViewModel) {
                     ) { index, album ->
                         AlbumCard(
                             album = album,
+                            isScreenSaver = isScreenSaverAlbum(album.id, screenSaverId),
                             onClick = { viewModel.openAlbum(album) },
                             modifier = memory.modifierFor(index),
                         )
@@ -106,6 +113,7 @@ fun AlbumsSection(viewModel: MainViewModel) {
 @Composable
 private fun AlbumCard(
     album: AlbumItem,
+    isScreenSaver: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -124,6 +132,17 @@ private fun AlbumCard(
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                // Which album plays itself is not visible from the covers, and the setting that
+                // decides it is two screens away in 设置. The badge is the answer to "which one
+                // did I pick", on the card rather than only in the screen that set it.
+                if (isScreenSaver) {
+                    Badge(
+                        text = stringResource(R.string.screen_saver_badge),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(10.dp),
                     )
                 }
             }

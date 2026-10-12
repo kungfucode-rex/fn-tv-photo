@@ -4,6 +4,8 @@ import android.content.Context
 import com.tvphoto.data.fn.CertificatePinStore
 import com.tvphoto.data.fn.SignMode
 import com.tvphoto.data.fn.SignModeStore
+import com.tvphoto.data.music.decodeMusicOrder
+import com.tvphoto.data.music.encodeMusicOrder
 import java.util.Locale
 
 /**
@@ -75,6 +77,32 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         set(value) = prefs.edit().putBoolean(KEY_SHUFFLE, value).apply()
 
     /**
+     * The album this television plays by itself after nobody has touched the remote for
+     * a while — the 屏保相册 — or null when none is set, which is the default.
+     *
+     * Stored as two values rather than as the album object: an id is what asks the NAS for
+     * the photos, and a **name** is what the settings row and the long-press menu can read
+     * without listing every album on every screen — a television with a large library pays
+     * a round trip for that list, and a name that only appeared once the list had loaded
+     * would look like the setting had been lost.
+     *
+     * The name is therefore a remembered label, not a fact: an album renamed on the NAS
+     * still screen-saves correctly (the id is what plays) and still reads as the old name
+     * here until it is chosen again. That is the same trade `SavedAccount` makes with the
+     * account it is a shortcut to, and the alternative — no name at all — leaves the row
+     * saying "已指定" and nothing about which album.
+     */
+    var screenSaverAlbumId: String?
+        get() = prefs.getString(KEY_SCREEN_SAVER_ALBUM, null)?.takeIf { it.isNotBlank() }
+        set(value) = prefs.edit()
+            .putString(KEY_SCREEN_SAVER_ALBUM, value?.takeIf { it.isNotBlank() })
+            .apply()
+
+    var screenSaverAlbumName: String
+        get() = prefs.getString(KEY_SCREEN_SAVER_NAME, "").orEmpty()
+        set(value) = prefs.edit().putString(KEY_SCREEN_SAVER_NAME, value).apply()
+
+    /**
      * How the 文件夹 section lays its folders out.
      *
      * Persisted for the same reason as everything else here: a layout chosen once should
@@ -88,10 +116,48 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
      * Asset paths of the tracks ticked for the slideshow's background music, in the
      * order they play — which is the catalogue's order, not the order they were ticked.
      * An empty list means no music, which is the default.
+     *
+     * Since 1.5.0 the list also holds `file:` ids for music that is not in the APK:
+     * uploaded files and files found on this device. What is dropped here is only what
+     * could never play at all (a stray value, a renamed asset); whether a file is still
+     * *there* is answered by [com.tvphoto.data.music.MusicLibrary], which is the only
+     * thing that can look.
      */
     var slideshowMusic: List<String>
         get() = decodeMusicSelection(prefs.getString(KEY_MUSIC, null))
         set(value) = prefs.edit().putString(KEY_MUSIC, encodeMusicSelection(value)).apply()
+
+    /**
+     * The order the user arranged their music in, as ids.
+     *
+     * Stored rather than derived from the files, because the arrangement is a decision and
+     * not a fact about them: the upload page's 排序 mode is the only thing that writes it,
+     * and a new upload is prepended to it. It holds *every* kind of track — a bundled asset
+     * path is just another id here, which is what lets the bundled track be moved around
+     * like anything else. It is allowed to be incomplete in both directions:
+     * `orderedByStoredOrder` skips ids it cannot place and appends tracks the list does not
+     * name yet, so a deleted file cannot corrupt it.
+     */
+    var musicOrder: List<String>
+        get() = decodeMusicOrder(prefs.getString(KEY_MUSIC_ORDER, null))
+        set(value) = prefs.edit()
+            .putString(KEY_MUSIC_ORDER, encodeMusicOrder(value))
+            .apply()
+
+    /**
+     * Bundled tracks the user has deleted, by asset path.
+     *
+     * The one kind of delete that cannot touch a file: `assets/music` is inside the APK and
+     * read-only, so 删除 on one of the four recorded here means "not in my list any more".
+     * It is reversible on purpose ([MusicLibrary.restoreBuiltins]) — the bytes are still in
+     * the package, and a delete that cannot be undone but also cannot free a byte would be
+     * the worst of both.
+     */
+    var musicRemovedBuiltins: List<String>
+        get() = decodeMusicOrder(prefs.getString(KEY_MUSIC_REMOVED, null))
+        set(value) = prefs.edit()
+            .putString(KEY_MUSIC_REMOVED, encodeMusicOrder(value))
+            .apply()
 
     /**
      * Remembered logins, most recent first, keyed by host **and** user.
@@ -194,6 +260,10 @@ class SettingsStore(context: Context) : SignModeStore, CertificatePinStore {
         private const val KEY_SHUFFLE = "slideshow_shuffled"
         private const val KEY_FOLDER_LAYOUT = "folder_layout"
         private const val KEY_MUSIC = "slideshow_music"
+        private const val KEY_MUSIC_ORDER = "music_order"
+        private const val KEY_MUSIC_REMOVED = "music_removed_builtins"
+        private const val KEY_SCREEN_SAVER_ALBUM = "screen_saver_album"
+        private const val KEY_SCREEN_SAVER_NAME = "screen_saver_album_name"
         private const val DEFAULT_SLIDESHOW_SECONDS = 8
     }
 }

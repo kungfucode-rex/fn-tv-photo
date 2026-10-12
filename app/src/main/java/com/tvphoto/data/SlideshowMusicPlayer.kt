@@ -1,11 +1,13 @@
 package com.tvphoto.data
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import java.io.File
 
 /**
  * The slideshow's background music.
@@ -37,19 +39,34 @@ class SlideshowMusicPlayer(private val context: Context) {
      */
     private var loaded: List<String> = emptyList()
 
-    /** Starts — or resumes — [assets], looping in the order given. */
-    fun play(assets: List<String>) {
-        if (assets.isEmpty()) {
+    /** Starts — or resumes — [tracks], looping in the order given. */
+    fun play(tracks: List<String>) {
+        if (tracks.isEmpty()) {
             stop()
             return
         }
         val exo = player ?: newPlayer().also { player = it }
-        if (assets != loaded) {
-            exo.setMediaItems(assets.map { MediaItem.fromUri("asset:///$it") })
+        if (tracks != loaded) {
+            exo.setMediaItems(tracks.map { MediaItem.fromUri(uriFor(it)) })
             exo.prepare()
-            loaded = assets
+            loaded = tracks
         }
         exo.play()
+    }
+
+    /**
+     * Where one track's bytes are.
+     *
+     * A bundled track is `asset:///…`, which is how the four originals have always been
+     * read and how they still are. Everything else is a file: an upload in the library
+     * directory, or a track played where it lies on a USB stick — which is why the id
+     * carries the library's own `file:` prefix rather than a URI scheme, and why the
+     * prefix is stripped before the path reaches `Uri.fromFile` (a path with a colon at
+     * the front of it would be read as a scheme and never opened).
+     */
+    private fun uriFor(id: String): Uri {
+        val path = customMusicPath(id) ?: return Uri.parse("asset:///$id")
+        return Uri.fromFile(File(path))
     }
 
     /**

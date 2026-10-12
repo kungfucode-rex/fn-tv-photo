@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.4.11"
+val appVersionName = "1.5.7"
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -202,8 +202,95 @@ android {
         // against real sockets: 6 cases in ReviewRecoveryTest, including the two that cost
         // this build its afternoon - a repair reports the server replaced exactly once, and a
         // burst of refused calls still mints exactly one device.
-        versionCode = 25
+        // 26 is 1.5.0, the first build where the slideshow's music is not limited to the
+        // four tracks inside the APK. A phone scans a QR code the television serves itself
+        // and uploads songs into the app's own library directory; a USB stick, or the
+        // device's own Music and Download folders, can be scanned instead, and those files
+        // are played where they lie rather than copied. The bundled four are unchanged —
+        // the catalogue, the asset checks and the player's asset:/// path all still hold —
+        // so this is purely additive. The package grows by one dependency, zxing's encoder,
+        // because the upload page has no server behind it to draw the code the way 图评's
+        // does. Everything about it is in docs/custom-music-design.md.
+        // 27 is 1.5.1, and it is 26 with a new number: the first published build of the custom
+        // music work, pushed to the share so a television can install it. The number is the
+        // whole point — 26 never left this machine, and a TV refuses to lay a build over one
+        // with the same versionCode, so publishing 26's bytes as 1.5.0 would have been a file
+        // nobody could install. No code differs between 26 and 27.
+        // 28 is 1.5.2, the upload page after its first evening of use on a television. Four
+        // things changed and one of them is the package's size. The page is now the playlist:
+        // title and QR code on the left, one numbered list on the right with no 内置/我的音乐
+        // division, every row reorderable and deletable from a long press, a new upload landing
+        // at the top with its border flashing twice, and Back returning to whichever row opened
+        // the page. Deleting a bundled track cannot delete a file — it is inside the APK — so
+        // it hides that track and a 恢复内置曲目 row brings it back. And the catalogue is down to
+        // a *single* bundled track: with a phone able to put music on the television in ten
+        // seconds, four commercial recordings shipped in every APK were 10.7 MB that most
+        // installs never select, and one is enough to guarantee that a fresh install has
+        // something to play. That is why this build is 15.8 MB instead of 25.9.
+        // 29 is 1.5.3, which removes the scan. 扫描本机 / U 盘音乐 walked the public music and
+        // download folders and every mounted volume for audio, and kept what it found as
+        // *references* — files played where they lay. On a television it was a route nobody
+        // took (the phone upload is right there and takes ten seconds), and its costs were
+        // real: two storage permissions and a prompt to grant them, a scan-and-hope, a whole
+        // class of rows whose file had been unplugged, and a "our copy vs your file"
+        // distinction that reached all the way into what 删除 was allowed to do. All of it is
+        // gone. What replaces it is the sentence the page already needed: files live in one
+        // directory, and anything copied in there — by a cable, by a file manager — is picked
+        // up exactly like an upload. The page prints that path at the bottom of the list.
+        // 30 is 1.5.4, which is 29 with the strings caught up. Removing the scan left two
+        // sentences promising it back — 幻灯片设置's hint still offered "也可以扫描 U 盘里的音乐"
+        // and 清空我的音乐's still warned about "引用的文件（U 盘、本机目录）", which no longer exist
+        // — plus one dead string from the grouped list. The page itself already read the way
+        // it should: the library directory is printed at the bottom of the list, and the
+        // hint now says that a file copied in there works the same as an upload.
+        // 31 is 1.5.5, which is 30 plus two things a television found in an evening. The QR
+        // code and the text under it were crowded against the bottom of the screen; the block
+        // now sits above centre with a real gap under the card. And a long press on the first
+        // row came back as "it entered the sorting state and moved down one place": the two
+        // buttons were drawn with 排序 already selected, so the release that *ended* the long
+        // press ran it, and the next auto-repeat event (a held key keeps repeating) landed in
+        // the arrows mode as "move down". Now a long press leaves both buttons unselected,
+        // nothing happens until left/right picks one, auto-repeats are ignored in both
+        // management modes, and the long press is recognised either from a repeat mid-hold or
+        // from a single press-and-release — whichever the remote sends.
+        // 32 is 1.5.6, which fixes the sorting mode's keys. 31's long-press fix left two
+        // faults behind them: every key that was not ↑ was read as "down" — including the OK
+        // that had just chosen 排序, so picking it shifted the row one place — and OK could
+        // not confirm the arrangement at all, leaving Back as the only way out. Now only
+        // ↑/↓ move the track (and only on a fresh press), OK confirms and leaves the mode,
+        // and a confirmation only counts when its press *began* in that mode, so the release
+        // that chose 排序 cannot confirm the mode it just started. The strings catch up too:
+        // the page's hint says so.
+        // 32 also carries 屏保相册, which is the release's headline: 设置 → 通用 →
+        // 屏保相册 picks an album — from every album the account can see, its own and the
+        // ones shared with it — and once nothing has touched the remote for five minutes that
+        // album plays itself full screen, 弹幕 included, until any key or touch brings back
+        // exactly the screen and the position the user was on. It draws the viewer rather
+        // than a second slideshow, so it keeps the two image layers, the prefetch window, the
+        // interval/order/music settings and the review layer; what it deliberately does not
+        // have is the information band, the corner controls, the QR code and the live socket.
+        // The album's card wears a 屏保 badge, so "which one did I pick" is answerable without
+        // opening 设置. The number has to move for the usual reason: a television's installer
+        // refuses to lay a build over another with the same versionCode.
+        // 33 is 1.5.7, which is 32 with the number moved and 屏保相册's 弹幕 finished. The
+        // number had to move for a reason that is not bookkeeping: 1.5.6 was built and put on
+        // the share at 23:04 on 2026-10-12 without 屏保相册, and a television's installer
+        // refuses to lay a build over another with the same versionCode — so the build that
+        // adds the feature would have been the one nobody could install over the build that
+        // lacks it. 32's entry below is what 1.5.6 was; this is that plus the screensaver and
+        // the fact that a screensaver album now registers its photos (so their comments exist)
+        // and fetches them without holding a socket open.
+        versionCode = 33
         versionName = appVersionName
+
+        // How long the app may sit untouched before the 屏保相册 starts playing. The release
+        // value is the product decision (five minutes) and is what `SCREEN_SAVER_IDLE_MILLIS`
+        // in the app repeats as its own default; the debug build makes it fifteen seconds so
+        // that "the television starts playing by itself" can actually be watched on the
+        // emulator rather than waited out. It is a build field rather than a temporary edit
+        // to the source for one reason: a value edited by hand to run a test is a value that
+        // can be committed, and then every user's screensaver fires after fifteen seconds.
+        buildConfigField("long", "SCREEN_SAVER_IDLE_MILLIS", "300000L")
     }
 
     androidResources {
@@ -223,6 +310,10 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
+            // Fifteen seconds, on purpose: the only way to see the screensaver is to leave
+            // the app alone, and five minutes of that is not a test anybody runs twice. See
+            // the note beside the release value in `defaultConfig`.
+            buildConfigField("long", "SCREEN_SAVER_IDLE_MILLIS", "15000L")
         }
         release {
             isMinifyEnabled = false
@@ -327,6 +418,13 @@ dependencies {
     // Video playback for the video entries that live in the NAS gallery.
     implementation("androidx.media3:media3-exoplayer:1.11.1")
     implementation("androidx.media3:media3-ui:1.11.1")
+
+    // The QR code on the phone-upload panel, and the only reason this dependency exists:
+    // 图评's codes are drawn by its server, but the upload page has no server to ask, so
+    // the code that gets a phone onto it has to be drawn here. Encoding only — the camera
+    // and decoding halves are not referenced and not packaged — and a plain JAR, so it has
+    // none of the compileSdk ceilings the Android libraries above are pinned around.
+    implementation("com.google.zxing:core:3.5.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

@@ -36,11 +36,41 @@ sealed interface Screen {
     data class FolderBrowse(val path: String, val name: String) : Screen
 
     /**
+     * The music library: what the slideshow can play besides the four bundled tracks.
+     *
+     * A screen of its own rather than a pane inside 设置, because it is reached from two
+     * places that are not settings — the viewer's track list and the settings row — and
+     * because it is the one place where a guest's phone is talking to this television while
+     * the user is looking at it.
+     */
+    data object Music : Screen
+
+    /**
      * Full-screen viewer. It intentionally holds only an index: the surrounding
      * item list lives in the view model so that pages loaded while the viewer is
      * open are immediately browsable.
      */
     data class Viewer(val index: Int, val title: String) : Screen
+
+    /**
+     * The 屏保相册 playing itself, after nobody has touched the remote for a while.
+     *
+     * A screen of its own rather than "the viewer, but with a flag", and the reason is the
+     * gallery underneath it. `_gallery` holds the list of exactly one screen — the topmost
+     * one that is not a viewer — so opening *Screen.AlbumPhotos* would have replaced the
+     * grid the user was standing on with the screensaver album's photos, and coming back
+     * from the screensaver would have left them on a grid of somebody else's pictures,
+     * scrolled to the position memory of a screen they never visited. With its own type
+     * this screen owns its own gallery entry, its own cache key and its own position
+     * memory (which nothing ever writes — the user never stands on it), and the album grid
+     * underneath is left exactly as it was.
+     *
+     * It draws the viewer rather than a plain image, on purpose: the two layers that keep a
+     * step from flashing black, the prefetch window, the show's interval and its music are
+     * all in that screen, and a second implementation of them would be a second set of bugs
+     * (see `ViewerScreen`).
+     */
+    data class ScreenSaverAlbum(val album: AlbumItem) : Screen
 }
 
 /** Heading shown above the content of a screen. */
@@ -48,23 +78,30 @@ fun Screen.displayTitle(
     formatMonth: (Int, Int) -> String,
     fallback: String = "",
 ): String = when (this) {
-    Screen.Home -> fallback
+    // Home draws its own heading per section, and the music screen draws its own title.
+    Screen.Home, Screen.Music -> fallback
     is Screen.MonthPhotos -> formatMonth(month.year, month.month)
     is Screen.AlbumPhotos -> album.name
     is Screen.PersonPhotos -> person.name.ifBlank { fallback }
     is Screen.FolderBrowse -> name
     is Screen.Viewer -> title
+    is Screen.ScreenSaverAlbum -> album.name
 }
 
 /** Stable identity for the per-screen item cache and for position memory. */
 val Screen.cacheKey: String
     get() = when (this) {
         Screen.Home -> "home"
+        Screen.Music -> "music"
         is Screen.MonthPhotos -> "month:${month.id}"
         is Screen.AlbumPhotos -> "album:${album.id}"
         is Screen.PersonPhotos -> "person:${person.id}"
         is Screen.FolderBrowse -> "folder:$path"
         is Screen.Viewer -> "viewer:$index"
+        // Prefixed like the album key, and never equal to it: the two hold different lists
+        // of the same album, and sharing one entry would let whichever loaded last decide
+        // what the other screen shows.
+        is Screen.ScreenSaverAlbum -> "screensaver:${album.id}"
     }
 
 /** Locale helper kept here so [displayTitle] stays free of Android types. */
@@ -85,6 +122,18 @@ object PositionKeys {
     const val SHARED = "shared-albums"
     const val PEOPLE = "people"
     const val FOLDERS = "folders"
+
+    /**
+     * Which settings pane is open, and which of its rows was last pressed.
+     *
+     * Session state rather than a preference, but kept in the same place as the list
+     * positions and for the same reason: the screen that owns these is disposed while
+     * another screen is on top of it, and `rememberSaveable` does not survive that. The
+     * symptom it fixes is concrete — opening the upload page from 幻灯片设置 and pressing
+     * Back landed on 版本升级, because the pane fell back to its default.
+     */
+    const val SETTINGS_PANE = "settings:pane"
+    const val SETTINGS_ROW = "settings:row"
 
     fun forSection(section: HomeSection): String = when (section) {
         HomeSection.Timeline -> TIMELINE_YEARS

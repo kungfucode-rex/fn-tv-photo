@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.media3.datasource.DataSource
 import com.tvphoto.TvPhotoApp
 import com.tvphoto.BuildConfig
+import com.tvphoto.R
 import com.tvphoto.data.ApkInstaller
 import com.tvphoto.data.AppContainer
 import com.tvphoto.data.FolderLayout
@@ -20,6 +21,10 @@ import com.tvphoto.data.UpdateCheckResult
 import com.tvphoto.data.UpdateRelease
 import com.tvphoto.data.accountFor
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.music.MusicEntry
+import com.tvphoto.data.music.MusicLibraryState
+import com.tvphoto.data.music.MusicUploadServer
+import com.tvphoto.data.normalizeMusicSelection
 import com.tvphoto.data.review.DanmakuLevel
 import com.tvphoto.data.review.ReviewCandidate
 import com.tvphoto.data.review.ReviewMode
@@ -95,6 +100,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private val _restoringSession = MutableStateFlow(container.settings.hasSavedCredentials)
     val restoringSession: StateFlow<Boolean> = _restoringSession.asStateFlow()
+
+    /**
+     * True while a token that went stale is being replaced behind the user's back.
+     *
+     * The second half of "the 401 a television shows after being left alone, and the retry
+     * that has to work": this is what the app covers with a loading screen while it logs
+     * in again, instead of flashing a login form at somebody who never signed out.
+     */
+    val recoveringSession: StateFlow<Boolean> = container.sessions.recovering
 
     // ------------------------------------------------------------ navigation
     private val _stack = MutableStateFlow<List<Screen>>(listOf(Screen.Home))
@@ -174,6 +188,228 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _themeMode = MutableStateFlow(container.settings.themeMode)
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    // ------------------------------------------------------------- 屏保相册
+    //
+    // The album that plays itself when the television has been left alone, and the clock that
+    // decides when "left alone" has passed. See `Screen.ScreenSaverAlbum` for the screen and
+    // `ScreenSaver` for the two rules, and `AppRoot` for the timer: the timer is a composable
+    // effect because that is what makes it stop when the app is not on screen.
+
+    /**
+     * The screensaver album's id, mirrored from the store so the album cards can mark
+     * themselves and the settings row can name it.
+     *
+     * A flow rather than a live read like [savedHost], because this one changes *while the
+     * screen is up*: the long-press menu writes it, and the card that was long-pressed has to
+     * gain its badge without the grid being rebuilt.
+     */
+    private val _screenSaverAlbumId = MutableStateFlow(container.settings.screenSaverAlbumId)
+    val screenSaverAlbumId: StateFlow<String?> = _screenSaverAlbumId.asStateFlow()
+
+    /**
+     * The name stored beside that id. Read live: nothing on screen changes when it is written
+     * except the settings row, and that row is recomposed by the id's flow anyway.
+     */
+    val screenSaverAlbumName: String get() = container.settings.screenSaverAlbumName
+
+    /** The album the timer should open, or null when none is set. */
+    private val _screenSaverTarget = MutableStateFlow<AlbumItem?>(null)
+    val screenSaverTarget: StateFlow<AlbumItem?> = _screenSaverTarget.asStateFlow()
+
+    /**
+     * True from the moment the screensaver is triggered until the user comes back.
+     *
+     * Not the same thing as "the screensaver screen is on the stack": the screen is pushed
+     * only once its album has been read from the NAS, and until then this is what stops the
+     * timer from firing again on every recomposition of the root.
+     */
+    private var screenSaverOpening = false
+
+    /**
+     * What `_gallery` held before the screensaver replaced it.
+     *
+     * Kept for the one window in which it matters: the screensaver is triggered, and the user
+     * presses a key before the pushed screen has drawn anything. Then nothing of the
+     * screensaver was ever on screen and what should be shown is what was there before.
+     */
+    private var screenSaverGalleryBackup: GalleryState? = null
+
+    /** The album currently playing itself, for the cache entry it has to clean up after. */
+    private var screenSaverPlaying: AlbumItem? = null
+
+    /** Whether a screensaver album is set, which is what the root's timer waits on. */
+    val screenSaverSet: Boolean get() = !container.settings.screenSaverAlbumId.isNullOrBlank()
+
+    /**
+     * Whether the screensaver is the thing on screen right now.
+     *
+     * Asked by [openScreenSaver]'s caller — the root's timer — and by anything that has to
+     * know that the viewer in front of it is playing somebody's album rather than showing a
+     * photo they asked for. The marker is the album screen, which is pushed first and stays
+     * under the viewer for as long as the screensaver lasts.
+     */
+    val screenSaverActive: Boolean
+        get() = _stack.value.any { it is Screen.ScreenSaverAlbum }
+
+    /**
+     * 设为屏保相册: this album plays itself when nobody has touched the remote for a while.
+     *
+     * The name is stored beside the id rather than looked up later, so that the settings row
+     * can say which album it is before any album list has been fetched — see the note on the
+     * preference. A blank name falls back to the word the grid uses for it, or the row would
+     * read as unset while an album was in fact set.
+     */
+    fun setScreenSaverAlbum(album: AlbumItem) {
+        container.settings.screenSaverAlbumId = album.id.toString()
+        container.settings.screenSaverAlbumName =
+            album.name.ifBlank { getApplication<Application>().getString(R.string.album_untitled) }
+        _screenSaverAlbumId.value = container.settings.screenSaverAlbumId
+        // The object is set here rather than left for [resolveScreenSaverAlbum], which has
+        // already run: the album in hand *is* the one to play, and waiting for a resolution
+        // that has been done would leave the timer holding nothing while the settings row said
+        // an album was set.
+        screenSaverResolved = true
+        _screenSaverTarget.value = album
+    }
+
+    /**
+     * 取消屏保相册: nothing plays itself any more.
+     *
+     * The name goes with the id — a row that kept the last album's name beside no album would
+     * read as still being set, and the next screensaver would have to be picked from a list
+     * whose tick was nowhere.
+     */
+    fun clearScreenSaverAlbum() {
+        container.settings.screenSaverAlbumId = null
+        container.settings.screenSaverAlbumName = ""
+        _screenSaverAlbumId.value = container.settings.screenSaverAlbumId
+        // Nothing to resolve any more, and nothing for the timer to open. The flag is cleared
+        // with the value so that re-setting an album later goes through the lookup again rather
+        // than trusting an object that is no longer stored.
+        screenSaverResolved = false
+        _screenSaverTarget.value = null
+    }
+
+    /**
+     * Starts the screensaver: reads the album's first page, then puts it on screen.
+     *
+     * The load happens *before* the screen is pushed, and that is the whole reason this is not
+     * simply `push`. A viewer with an empty list draws an empty screen; pushing first would put
+     * one on a television in a dark room for as long as the NAS took to answer, and if the
+     * answer never came it would stay there until somebody picked up the remote to investigate
+     * something they never asked for. Loading first means the failure mode of an unreachable
+     * NAS is "nothing happened", which is the right one for a feature nobody is watching.
+     *
+     * Two screens, not one: the album grid is pushed first and then the viewer, because the
+     * viewer takes an *index* and a show should not open on a video — the rotation walks past
+     * clips, and opening on one would put a playing film on screen with nobody watching it
+     * until the first interval had passed. The grid under it is also what `galleryScreen()`
+     * answers while the viewer is up, so the party-mode re-read and the next-page request both
+     * go on asking for the right album.
+     *
+     * Deliberately not cached for reuse, unlike the grids: every trigger re-reads the album.
+     * What a screensaver is *for* is a slideshow of what is in the album now, and the cache
+     * would otherwise hold the list from the evening the album was chosen — on a television
+     * that has been on for days.
+     */
+    fun openScreenSaver(target: AlbumItem) {
+        if (screenSaverOpening || screenSaverActive) return
+        screenSaverOpening = true
+        val screen = Screen.ScreenSaverAlbum(target)
+        viewModelScope.launch {
+            try {
+                val page = runCatching { loadPage(screen, offset = 0, limit = PAGE_SIZE) }.getOrNull()
+                val first = page?.items?.indexOfFirst { !it.isVideo } ?: -1
+                if (page == null || first < 0) {
+                    // Nothing to play: the album is empty, or it holds nothing but clips, or the
+                    // NAS is off. Either way there is no slideshow, and clearing the flag is what
+                    // lets the next idle period try again rather than leaving the feature
+                    // switched off for the session.
+                    screenSaverOpening = false
+                    return@launch
+                }
+                screenSaverGalleryBackup = _gallery.value
+                screenSaverPlaying = target
+                val state = GalleryState(
+                    title = target.name,
+                    items = ContentState.Ready(page.items),
+                    canLoadMore = page.hasMore,
+                )
+                galleryCache[screen.cacheKey] = state
+                _gallery.value = state
+                // The title is the album's rather than the viewer's own, so the information
+                // band — which the screensaver never draws — cannot disagree with the screen.
+                _stack.value = _stack.value + screen + Screen.Viewer(first, target.name)
+            } catch (t: Throwable) {
+                screenSaverOpening = false
+                Log.w(TAG, "屏保相册 could not be opened", t)
+            }
+        }
+    }
+
+    /**
+     * Leaves the screensaver, which any key press or touch does.
+     *
+     * Pops the viewer and the album screen together, so one press anywhere lands back exactly
+     * where the user was — and restores the gallery the screensaver took over, but only while
+     * nothing of it was ever shown (the user pressed a key inside the load's own moment). Once
+     * a photo has been on screen the screensaver did what it was for, and putting the previous
+     * list back would replace what is being looked at with a grid nobody asked for.
+     */
+    fun stopScreenSaver() {
+        screenSaverOpening = false
+        val playing = screenSaverPlaying
+        val backup = screenSaverGalleryBackup
+        screenSaverPlaying = null
+        screenSaverGalleryBackup = null
+        // The screensaver pushes the album screen and then the viewer over it, so everything
+        // from the marker onwards is the screensaver — and `indexOfLast` rather than `first`,
+        // because a screensaver that was somehow opened twice must still leave the stack where
+        // it found it in one press.
+        val marker = _stack.value.indexOfLast { it is Screen.ScreenSaverAlbum }
+            .takeIf { it >= 0 } ?: return
+        val viewer = _stack.value.getOrNull(marker + 1)
+        if (viewer != null) {
+            // The viewer the screensaver pushed is dropped with its marker, and so is the
+            // position it remembered — index 0 of somebody's album is not where the user left
+            // the grid they are about to be shown again.
+            galleryCache.remove(viewer.cacheKey)
+            positions.remove(viewer.cacheKey)
+        }
+        if (playing != null) galleryCache.remove(Screen.ScreenSaverAlbum(playing).cacheKey)
+        // Only while nothing of the screensaver was ever drawn: `_gallery` still being
+        // item-less means the load's own moment is where the user pressed the key, and what
+        // should be on screen is what was there before. Once a photo has been shown the
+        // screensaver did what it was for, and putting the previous list back would replace
+        // what is being looked at with a grid nobody asked for.
+        if (backup != null && _gallery.value.items.valueOrNull == null) _gallery.value = backup
+        _stack.value = _stack.value.take(marker)
+    }
+
+    private val _lastActivityAt = MutableStateFlow(System.currentTimeMillis())
+
+    /**
+     * The clock the screensaver's timer measures from: when the user last touched anything.
+     *
+     * A `StateFlow` rather than a bare long because `AppRoot` has to *restart* its delay when a
+     * key arrives. Reading it there with `collectAsStateWithLifecycle` is what confines the
+     * recomposition that every key press causes to the root composable — the app originally
+     * kept this in `remember` state at the top of `AppRoot`, where each D-pad press recomposed
+     * the whole signed-in tree: the rail, the section, and every card in it.
+     */
+    val lastActivityAt: StateFlow<Long> = _lastActivityAt.asStateFlow()
+
+    /**
+     * Records that the user did something, which restarts the idle clock.
+     *
+     * Called from the root for every key and every touch — not from the screens' own handlers,
+     * which do not all see a key (a focus change caused by the D-pad is not an event anybody
+     * here handles) and would each have to remember to call it.
+     */
+    fun recordActivity() {
+        _lastActivityAt.value = System.currentTimeMillis()
+    }
 
     private val _signMode = MutableStateFlow(container.signMode)
     val signMode: StateFlow<SignMode> = _signMode.asStateFlow()
@@ -261,6 +497,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val previewRequests = mutableSetOf<String>()
 
     /**
+     * Whether the stored screensaver album has been looked up in an album list yet.
+     *
+     * A stored id is a number; a screensaver needs the album's *name* for the slideshow's
+     * title, so the id has to be resolved against `albums()` once. It is done here rather than
+     * in the root's timer because the list it needs is the one the 相册 section already loads,
+     * and asking for it twice would be two requests for the same list.
+     */
+    private var screenSaverResolved = false
+
+    /**
+     * Where the user last left each list or grid, keyed by [PositionKeys] or [Screen.cacheKey].
+     *
+     * Declared above the `init` block on purpose, and the placement is load-bearing:
+     * `resetContent` clears this map, and `resetContent` can run *during construction*.
+     * `viewModelScope` is `Dispatchers.Main.immediate`, so on a cold start with a stored
+     * login the session collector below runs its first emission eagerly — `SignedIn` is
+     * already the current value — and everything it touches has to be initialised by then.
+     * With this declared beside the functions that use it (further down the class body) a
+     * cold start died on launch with `NullPointerException: Map.clear() on a null object
+     * reference`, which is the one crash every user would hit.
+     */
+    private val positions = mutableMapOf<String, Int>()
+
+    /**
      * Section lists with a load in flight. Only ever touched on the main thread, which
      * is where `selectSection` and `viewModelScope` both run.
      */
@@ -283,6 +543,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     SessionState.SignedOut -> loadedToken = null
                     else -> Unit
+                }
+            }
+        }
+
+        // The music library, and the one rule that needs both halves to keep: the stored
+        // selection is pruned against the files that are actually there. A preference can
+        // name an upload somebody deleted with a file manager, or a track on a USB stick
+        // that is currently unplugged; the first must stop playing, and only something that
+        // can look at the storage is allowed to decide which is which.
+        container.musicLibrary.refresh()
+        viewModelScope.launch {
+            container.musicLibrary.state.collect { library ->
+                val pruned = normalizeMusicSelection(
+                    container.settings.slideshowMusic,
+                    library.availableUploadIds,
+                )
+                if (pruned != container.settings.slideshowMusic) {
+                    container.settings.slideshowMusic = pruned
+                    _slideshowMusic.value = container.settings.slideshowMusic
                 }
             }
         }
@@ -312,6 +591,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+
+        // The screensaver album's name, resolved against the album list the moment the app can
+        // ask for one. It has to happen without anybody opening 相册, because the timer that
+        // opens the screensaver is armed whether or not that section has ever been visited.
+        if (container.settings.hasSavedCredentials) {
+            loadAlbums()
+        }
+
+        // Ask the release page what the newest build is, once, as soon as the app is up.
+        //
+        // It has to happen without anybody opening 设置, because the answer is drawn *on*
+        // the 设置 entry of the navigation rail — a red dot saying there is something to
+        // install — and a dot that only appears after the page it points at has been
+        // visited tells nobody anything. The request goes to Gitee and GitHub, never the
+        // NAS: a 401 from a stale session is not a reason for it to fail, and its failure
+        // is not a reason to hold up anything else.
+        autoCheckForUpdate()
     }
 
     // ------------------------------------------------------------------ auth
@@ -446,7 +742,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     )
 
     fun loadAlbums(force: Boolean = false) =
-        loadSection(_albums, force, fetch = { container.photos.albums() })
+        loadSection(
+            target = _albums,
+            force = force,
+            fetch = { container.photos.albums() },
+            onLoaded = ::resolveScreenSaverAlbum,
+        )
+
+    /**
+     * Looks the stored screensaver album up in a freshly-read album list, once.
+     *
+     * `onLoaded` of [loadAlbums], which means the list is already in hand and resolving costs
+     * nothing — the alternative was a request of its own at start-up for a feature that may
+     * never be used. A stored id that no longer appears is left unresolved and retried on the
+     * next album list, rather than cleared: an album that is momentarily missing from a list —
+     * a share that is being re-granted, a NAS that answered the request badly — must not empty
+     * a setting the user made.
+     */
+    private fun resolveScreenSaverAlbum(albums: List<AlbumItem>) {
+        if (screenSaverResolved) return
+        val id = container.settings.screenSaverAlbumId ?: return
+        val album = albums.firstOrNull { it.id.toString() == id } ?: return
+        screenSaverResolved = true
+        _screenSaverTarget.value = album
+        // The stored name is what the settings row shows, and it is what the user typed their
+        // way to when they set it — so it is only refreshed when there is nothing there at all.
+        if (container.settings.screenSaverAlbumName.isBlank()) {
+            container.settings.screenSaverAlbumName = album.name
+        }
+    }
 
     /** Albums other accounts have shared with this one; empty is a normal state. */
     fun loadSharedAlbums(force: Boolean = false) =
@@ -681,9 +1005,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (galleryScreen() == screen) _gallery.value = state
     }
 
+    /**
+     * One page of the list a grid holds.
+     *
+     * The `else` is not dead code to be tidied away: [Screen.Viewer] and [Screen.Music] reach it,
+     * and neither has a list of its own. [Screen.ScreenSaverAlbum] has one, and forgetting it
+     * here is a silent, total failure of the 屏保相册 — the page comes back empty, the screensaver
+     * decides there is nothing to play, and the only symptom is a television that never starts
+     * playing. It was found by logging `page=0 firstPhoto=-1` on a device, not by reading this.
+     */
     private suspend fun loadPage(screen: Screen, offset: Int, limit: Int): MediaPage = when (screen) {
         is Screen.MonthPhotos -> container.photos.photosInMonth(screen.month, limit, offset)
         is Screen.AlbumPhotos -> container.photos.albumPhotos(screen.album.id, limit, offset)
+        is Screen.ScreenSaverAlbum -> container.photos.albumPhotos(screen.album.id, limit, offset)
         is Screen.PersonPhotos -> container.photos.personPhotos(screen.person.id, limit, offset)
         is Screen.FolderBrowse -> container.photos.folderFiles(screen.path, limit, offset)
         else -> MediaPage(emptyList(), hasMore = false)
@@ -692,8 +1026,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --------------------------------------------------------------- settings
 
     // ------------------------------------------------------- position memory
-
-    private val positions = mutableMapOf<String, Int>()
 
     /**
      * Where the user last left the list or grid identified by [key], or
@@ -755,6 +1087,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /** Ends the music outright, so a later show starts the list from the top. */
     fun stopSlideshowMusic() = container.slideshowMusic.stop()
+
+    // ------------------------------------------------------- music library (1.5.0)
+
+    /**
+     * The tracks the slideshow can play: the four in the APK, plus what a phone uploaded
+     * and what was found on this device.
+     *
+     * Read straight from the library rather than mirrored: an upload lands on the server's
+     * own thread, and a mirror that only moved when this object was poked would leave the
+     * track off the list until something else happened.
+     */
+    val musicLibrary: StateFlow<MusicLibraryState> get() = container.musicLibrary.state
+
+    /** The phone-upload server, alive only while its page is on screen. */
+    val musicUpload: StateFlow<MusicUploadServer.State> get() = container.musicUploads.state
+
+    /** Opens the upload page, from the settings rows and from the viewer's track list. */
+    fun openMusicUpload() {
+        push(Screen.Music)
+        refreshMusicLibrary()
+    }
+
+    /**
+     * Moves one track by [delta] places, from the page's 排序 mode.
+     *
+     * The order is stored as it moves rather than on a confirmation press: the arrows are
+     * the edit, and Back afterwards only leaves the mode. The page says so, and
+     * `docs/custom-music-design.md` §3 records why.
+     */
+    fun moveMusic(id: String, delta: Int) = container.musicLibrary.moveTrack(id, delta)
+
+    /** Puts the bundled tracks the user deleted back into the list. */
+    fun restoreBuiltinMusic() = container.musicLibrary.restoreBuiltins()
+
+    fun refreshMusicLibrary() = container.musicLibrary.refresh()
+
+    /**
+     * Removes one track from the list.
+     *
+     * What that means is the library's decision, not the screen's: an upload's file is
+     * deleted, and the bundled track — whose bytes are inside the APK — can only be taken out
+     * of the list, reversibly.
+     */
+    fun deleteMusicTrack(entry: MusicEntry) {
+        container.musicLibrary.delete(entry)
+        // The stored selection is pruned by the collector in `init`, so a deleted track
+        // stops playing without this call having to guess at the new list.
+    }
+
+    fun clearMusicUploads() = container.musicLibrary.clearUploads()
+
+    /** Opens the listener. Called when the upload page appears. */
+    fun startMusicUpload() = container.musicUploads.start()
+
+    /** Closes it. Called when the page is left. */
+    fun stopMusicUpload() = container.musicUploads.stop()
 
     fun setSignMode(mode: SignMode) {
         container.forceSignMode(mode)
@@ -892,6 +1280,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun stopReviewedPhotoLive() {
         container.review.stopLive()
+    }
+
+    /**
+     * Fetches the current photo's comments without subscribing to new ones.
+     *
+     * The screensaver's half of [startReviewedPhotoLive]: it draws 弹幕 from whatever the
+     * server already holds, and deliberately does not hold a socket open to be told about
+     * comments nobody is there to read. See `ReviewRepository.refreshCommentsForCurrentPhoto`.
+     */
+    fun refreshReviewedPhotoComments() {
+        container.review.refreshCommentsForCurrentPhoto()
     }
 
     /** Registers the photos the viewer is about to show, like the image prefetcher does. */
@@ -1216,6 +1615,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         galleryCache.clear()
         previewRequests.clear()
         positions.clear()
+        // The screensaver album is a setting rather than content, so it is deliberately *not*
+        // forgotten here — but the resolved object is: it belongs to the album list that has
+        // just been thrown away, and the next list is what should decide whether that album is
+        // still there. Without this, the timer would go on opening an album that the account
+        // that just signed out was the only one able to see.
+        screenSaverResolved = false
+        _screenSaverTarget.value = null
+        screenSaverOpening = false
+        screenSaverPlaying = null
+        screenSaverGalleryBackup = null
         container.photos.clearCaches()
         _monthCovers.clear()
         _gallery.value = GalleryState()

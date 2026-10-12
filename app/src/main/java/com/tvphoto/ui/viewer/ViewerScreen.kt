@@ -70,7 +70,6 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.tvphoto.R
 import com.tvphoto.data.ImagePrefetcher
-import com.tvphoto.data.SLIDESHOW_MUSIC
 import com.tvphoto.data.SettingsStore
 import com.tvphoto.data.review.DanmakuLevel
 import com.tvphoto.data.review.PhotoIdentity
@@ -79,6 +78,10 @@ import com.tvphoto.data.review.ReviewComment
 import com.tvphoto.data.review.ReviewStatus
 import com.tvphoto.data.review.ReviewView
 import com.tvphoto.data.review.StayExtension
+import com.tvphoto.ui.music.MusicRow
+import com.tvphoto.ui.music.firstTickedRow
+import com.tvphoto.ui.music.musicRows
+import com.tvphoto.ui.music.nextSelectableRow
 import com.tvphoto.domain.needsNextPage
 import com.tvphoto.domain.nextSlideshowItem
 import com.tvphoto.domain.walkPagingPointer
@@ -96,13 +99,40 @@ import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 @Composable
-fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
+fun ViewerScreen(
+    viewModel: MainViewModel,
+    screen: Screen.Viewer,
+    /**
+     * True when this is the 屏保相册 playing itself rather than a viewer somebody opened.
+     *
+     * Two differences, and no more — the two image layers, the paging queue, the prefetch
+     * window, the interval, the order and the **弹幕** are the same screen they always were,
+     * which is the point of drawing a viewer rather than writing a second slideshow:
+     *
+     *  - the show starts by itself, because nobody is there to press 幻灯片;
+     *  - the information band, the corner controls and the QR code are never drawn, because a
+     *    screensaver with a filename or a code across it is a menu, not a picture. The code in
+     *    particular is addressed to somebody standing in front of the television with a phone,
+     *    and a screensaver is on because nobody is in the room.
+     *
+     * It is still the *viewer*'s Back that leaves it, and the root's: any key at all ends the
+     * screensaver, which is why nothing here handles that.
+     */
+    screenSaver: Boolean = false,
+) {
     val gallery by viewModel.gallery.collectAsStateWithLifecycle()
     val items = gallery.items.valueOrNull.orEmpty()
     val slideshowSeconds by viewModel.slideshowSeconds.collectAsStateWithLifecycle()
     val slideshowShuffled by viewModel.slideshowShuffled.collectAsStateWithLifecycle()
     val previewOriginal by viewModel.previewOriginal.collectAsStateWithLifecycle()
     val selectedMusic by viewModel.slideshowMusic.collectAsStateWithLifecycle()
+
+    // The rows the track list draws: the bundled four, then whatever a phone uploaded or was
+    // found on this device, then the way in to the music screen. Built here rather than
+    // remembered against the library, because the library is already the remembered thing —
+    // it changes when an upload lands, and that is exactly when this list has to change too.
+    val musicLibrary by viewModel.musicLibrary.collectAsStateWithLifecycle()
+    val trackRows = musicRows(musicLibrary.entries)
     // For the party-mode notice, which is formatted with counts that only the polling
     // loop knows at the time.
     val context = LocalContext.current
@@ -134,7 +164,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     var layerIds by remember { mutableStateOf<List<Long?>>(listOf(items[startIndex].id, null)) }
     var frontLayer by remember { mutableIntStateOf(0) }
 
-    var slideshowRunning by remember { mutableStateOf(false) }
+    var slideshowRunning by remember { mutableStateOf(screenSaver) }
 
     /**
      * Whether the still the viewer asks for *now* is the original file.
@@ -344,7 +374,10 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // otherwise leave the button lit and its menu openable on a stale 已连接.
     val reviewStatus by viewModel.reviewStatus.collectAsStateWithLifecycle()
     val reviewDisabled = reviewStatus is ReviewStatus.NoServer
-    LaunchedEffect(Unit) { viewModel.refreshReviewStatus() }
+    // Not asked for while the screensaver is playing: the status is only ever drawn on the
+    // 图评 row, and a screensaver cannot open that row — so the request would be a call to
+    // somebody's server, in the middle of the night, for a screen that draws nothing of it.
+    LaunchedEffect(Unit) { if (!screenSaver) viewModel.refreshReviewStatus() }
 
     // Where the D-pad is in the corner. None of them while the band is closed or a row has
     // the D-pad.
@@ -930,7 +963,13 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // while something else has the room's attention. Those are the settings row, which
     // holds the photo timer for exactly the same reason, and a video, which brings its
     // own sound. Leaving the viewer ends it outright, at the bottom of this screen.
-    val musicWanted = slideshowRunning && selectedMusic.isNotEmpty()
+    //
+    // A screensaver never has it, which is the one place this screen's rules differ from the
+    // viewer's: the 背景音乐 setting is about a show somebody is watching, and the screensaver
+    // runs unattended in an empty room, usually at night. Starting a household's music library
+    // on a loop at 2am, because a photo album happens to be set as the screensaver, is a
+    // failure mode that would get the whole feature switched off.
+    val musicWanted = slideshowRunning && selectedMusic.isNotEmpty() && !screenSaver
     LaunchedEffect(musicWanted, cornerMenu, current.isVideo, selectedMusic, onScreen) {
         when {
             !musicWanted -> viewModel.stopSlideshowMusic()
@@ -950,12 +989,22 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
     // depend on it. It is out now: the 图评 menu's switches govern the display, and a menu
     // row that only takes effect once a slideshow is started is what "二维码 开 but nothing
     // on screen" turned out to be.
+    //
+    // The screensaver registers exactly like the viewer does, and that was a deliberate
+    // reversal: 弹幕 is what a screensaver album is *for* on a shared wall. A photo nobody
+    // chose, playing to an empty room, with the comments their family left on it drifting
+    // across — the first build suppressed all of this ("its photos were never chosen by
+    // anybody") and the result was a slideshow with the one thing this app adds removed.
+    // What stays off in a screensaver is the QR code (nobody is there to scan it) and the
+    // live socket (see below), not the comments.
     LaunchedEffect(currentId, reviewSource, current.isVideo) {
         viewModel.openReviewedPhoto(item = current, source = reviewSource)
     }
 
-    // Pre-registering: the codes for the next few photos are fetched before anybody asks
-    // for them, so a guest scanning the screen does not wait for a round trip (§9.2).
+    // Pre-registering: the codes and comments for the next few photos are fetched before
+    // anybody asks for them, so the danmaku of the photo after this one is already in hand
+    // when the show reaches it — the difference between a screensaver that annotates itself
+    // and one that shows every comment three seconds late.
     LaunchedEffect(currentId, slideshowRunning) {
         if (!slideshowRunning && !viewModel.isReviewOnForEveryPhoto) return@LaunchedEffect
         val ahead = items.asSequence()
@@ -980,8 +1029,22 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
 
     // The socket opens when the photo settles and closes when it changes. Following every
     // flick of the remote with a connection would be a connection per keystroke.
+    //
+    // A screensaver asks for the other half of the same call: the comments already on the
+    // photo, and no subscription. That is what makes 弹幕 appear at all on a screensaver —
+    // the history is fetched by the same request `startLive` makes before it subscribes, so
+    // a screensaver that skipped it drew a photo with none of its comments. Nobody is in the
+    // room to be told about a *new* one, and a socket opened and closed on every step would
+    // be a connection every eight seconds, all night, to deliver nothing.
     LaunchedEffect(currentId, reviewReady?.identity?.imageId) {
-        if (reviewReady != null) viewModel.startReviewedPhotoLive() else viewModel.stopReviewedPhotoLive()
+        when {
+            reviewReady == null -> viewModel.stopReviewedPhotoLive()
+            screenSaver -> {
+                viewModel.stopReviewedPhotoLive()
+                viewModel.refreshReviewedPhotoComments()
+            }
+            else -> viewModel.startReviewedPhotoLive()
+        }
     }
     DisposableEffect(Unit) {
         onDispose { viewModel.stopReviewedPhotoLive() }
@@ -1077,23 +1140,36 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
      * rather than always at the top.
      */
     fun openMusicList() {
-        val firstTicked = SLIDESHOW_MUSIC.indexOfFirst { it.asset in selectedMusic }
-        musicCursor = if (firstTicked >= 0) firstTicked else 0
+        musicCursor = firstTickedRow(trackRows, selectedMusic.toSet())
         musicListOpen = true
     }
 
     fun moveMusicCursor(delta: Int) {
-        if (SLIDESHOW_MUSIC.isEmpty()) return
-        musicCursor = (musicCursor + delta + SLIDESHOW_MUSIC.size) % SLIDESHOW_MUSIC.size
+        musicCursor = nextSelectableRow(trackRows, musicCursor, delta)
     }
 
-    /** Ticks or unticks one track. Applied at once, so the tick is the confirmation. */
-    fun toggleMusicTrack(index: Int) {
-        val track = SLIDESHOW_MUSIC.getOrNull(index) ?: return
-        viewModel.setSlideshowMusic(
-            if (track.asset in selectedMusic) selectedMusic - track.asset
-            else selectedMusic + track.asset,
-        )
+    /**
+     * OK on a row: a track is ticked or unticked, and the way in opens the upload page.
+     *
+     * Ticking is applied at once, so the tick is the confirmation.
+     */
+    fun activateMusicRow(index: Int) {
+        when (val row = trackRows.getOrNull(index)) {
+            is MusicRow.Track -> viewModel.setSlideshowMusic(
+                if (row.entry.id in selectedMusic) {
+                    selectedMusic - row.entry.id
+                } else {
+                    selectedMusic + row.entry.id
+                },
+            )
+
+            MusicRow.Manage -> {
+                musicListOpen = false
+                viewModel.openMusicUpload()
+            }
+
+            else -> Unit
+        }
     }
 
     /**
@@ -1333,7 +1409,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                             // shortcut it has always been.
                             !showInfo -> togglePlayback()
 
-                            inMusicList -> toggleMusicTrack(musicCursor)
+                            inMusicList -> activateMusicRow(musicCursor)
 
                             onOriginalButton -> requestOriginal()
 
@@ -1432,8 +1508,10 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
         //
         // Left alone while the band is open, because that is the band's space — and while
         // the 图评 menu is open, because that is the moment somebody is deciding whether
-        // they want it at all.
-        if (reviewReady != null && !current.isVideo && !showInfo && reviewShowQr) {
+        // they want it at all. Never in a screensaver: the code is addressed to somebody
+        // standing in front of the television with a phone in their hand, and a screensaver
+        // is on precisely because nobody is in the room.
+        if (reviewReady != null && !current.isVideo && !showInfo && reviewShowQr && !screenSaver) {
             ReviewQrCode(
                 pngFile = reviewReady.qrFile,
                 label = stringResource(R.string.viewer_qr_hint),
@@ -1520,6 +1598,7 @@ fun ViewerScreen(viewModel: MainViewModel, screen: Screen.Viewer) {
                     slideshowSeconds = slideshowSeconds,
                     shuffled = slideshowShuffled,
                     selectedMusic = selectedMusic,
+                    musicRows = trackRows,
                     musicCursor = musicCursor,
                     musicListOpen = musicListOpen,
                     playLabel = playLabel,
@@ -1813,6 +1892,7 @@ private fun SlideshowControls(
     slideshowSeconds: Int,
     shuffled: Boolean,
     selectedMusic: List<String>,
+    musicRows: List<MusicRow>,
     musicCursor: Int,
     musicListOpen: Boolean,
     playLabel: String,
@@ -1841,7 +1921,7 @@ private fun SlideshowControls(
             enter = fadeIn(),
             exit = fadeOut(),
         ) {
-            MusicTrackList(cursor = musicCursor, selected = selectedMusic)
+            MusicTrackList(cursor = musicCursor, selected = selectedMusic, rows = musicRows)
         }
 
         AnimatedVisibility(visible = inSlideshowRow, enter = fadeIn(), exit = fadeOut()) {
@@ -2003,6 +2083,7 @@ private fun pulseAlpha(active: Boolean): Float {
 private fun MusicTrackList(
     cursor: Int,
     selected: List<String>,
+    rows: List<MusicRow>,
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(12.dp)
@@ -2035,15 +2116,39 @@ private fun MusicTrackList(
             state = listState,
             modifier = Modifier.heightIn(max = MUSIC_LIST_MAX_HEIGHT),
         ) {
-            itemsIndexed(SLIDESHOW_MUSIC) { index, track ->
-                MusicTrackRow(
-                    title = track.title,
-                    ticked = track.asset in selected,
-                    highlighted = index == cursor,
-                )
+            itemsIndexed(rows) { index, row ->
+                when (row) {
+                    is MusicRow.Track -> MusicTrackRow(
+                        title = row.entry.title,
+                        ticked = row.entry.id in selected,
+                        highlighted = index == cursor,
+                    )
+
+                    MusicRow.Manage -> MusicActionRow(
+                        title = stringResource(R.string.music_viewer_manage),
+                        highlighted = index == cursor,
+                    )
+                }
             }
         }
     }
+}
+
+/** `＋ 上传 / 管理背景音乐…`: the one row in this list that is not a track. */
+@Composable
+private fun MusicActionRow(title: String, highlighted: Boolean) {
+    val primary = MaterialTheme.colorScheme.primary
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = if (highlighted) primary else Color.White.copy(alpha = 0.85f),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (highlighted) primary.copy(alpha = 0.25f) else Color.Transparent)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+    )
 }
 
 /** One track: a tick when it is in the show's playlist, and the cursor's highlight. */

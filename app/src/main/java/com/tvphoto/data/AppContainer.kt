@@ -15,6 +15,8 @@ import com.tvphoto.data.fn.FnCookieJar
 import com.tvphoto.data.fn.FnHttp
 import com.tvphoto.data.fn.FnHttpClient
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.music.MusicLibrary
+import com.tvphoto.data.music.MusicUploadServer
 import com.tvphoto.data.review.ReviewRepository
 import com.tvphoto.data.review.ReviewSettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -90,6 +92,19 @@ class AppContainer(context: Context) {
      * audio stack for the process.
      */
     val slideshowMusic: SlideshowMusicPlayer = SlideshowMusicPlayer(appContext)
+
+    /**
+     * The music that is not in the APK: what a phone uploaded, and what was found on this
+     * device or a USB stick.
+     *
+     * Owned here for the same reason as the player: two screens show it — the viewer's
+     * track list and the management screen — and both have to see the same library the
+     * moment an upload lands.
+     */
+    val musicLibrary: MusicLibrary = MusicLibrary(appContext, settings)
+
+    /** The phone's way in. Listens only while its panel is on screen; see [MusicUploadServer]. */
+    val musicUploads: MusicUploadServer = MusicUploadServer(appContext, musicLibrary)
 
     /** Shared by Coil and Media3 so thumbnails and video carry the token and cookie. */
     val mediaHttp: OkHttpClient =

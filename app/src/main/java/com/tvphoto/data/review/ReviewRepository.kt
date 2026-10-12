@@ -430,6 +430,25 @@ class ReviewRepository(
     fun stopLive() = closeSocket()
 
     /**
+     * Fetches the comments this television does not have yet, **without** opening a socket.
+     *
+     * The half of [startLive] that a screensaver needs, and the reason it is separate: the
+     * socket is a subscription to *new* comments, which is worth a connection while somebody
+     * is looking at a photo — the design keeps it closed through every flick of the remote for
+     * exactly that reason. A 屏保相册 has nobody to notify; a socket per photo would be a
+     * connection opened and closed every eight seconds, all night, to deliver nothing. What it
+     * does need is the *history*, because 弹幕 is the whole point of the layer: without this
+     * call the photo on screen renders and every comment its family left on it stays invisible.
+     *
+     * Fire and forget on purpose — the merge publishes through `_view`, which is where the
+     * viewer is already listening.
+     */
+    fun refreshCommentsForCurrentPhoto() {
+        val ready = _view.value as? ReviewView.Ready ?: return
+        refreshComments(ready.identity)
+    }
+
+    /**
      * The still's bytes, for the caller that has to build a candidate itself.
      *
      * Exposed because pre-registration has to happen where the list is — the viewer knows

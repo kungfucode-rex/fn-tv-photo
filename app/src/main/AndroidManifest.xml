@@ -13,6 +13,18 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
+      No storage permission is requested, and that is worth a line here so nobody adds one
+      back by mistake.
+
+      Music arrives one of two ways: a phone uploads it, or somebody copies a file into the
+      app's own library directory (`Android/data/<package>/files/music`). Both are the app's
+      own storage, so neither needs a permission — and the third way, scanning the device
+      and every USB stick for audio, was removed in 1.5.3 with its READ_MEDIA_AUDIO /
+      READ_EXTERNAL_STORAGE pair: pointing a television remote at a USB stick is not
+      something anybody does.
+    -->
+
+    <!--
       TV form factor: no touchscreen. leanback is *not* marked required: a TV that
       does not declare android.software.leanback (several Xiaomi/MIUI TV builds) must
       still be allowed to install and list the app. Nothing here is optional at

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>上传音乐到电视</title>
+<style>
+  :root {
+    --bg: #0e1622;
+    --card: #17222f;
+    --text: #eef3f8;
+    --muted: #94a7bb;
+    --line: #26374a;
+    --accent: #57b6ff;
+    --bad: #ff7a7a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    padding: 20px 16px 40px;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  }
+  h1 { margin: 0 0 6px; font-size: 21px; }
+  .sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+  .pick {
+    display: block;
+    padding: 26px 18px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    color: var(--accent);
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .pick input { display: none; }
+  ul { list-style: none; margin: 18px 0 0; padding: 0; }
+  li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--card);
+    font-size: 14px;
+  }
+  li .name { flex: 1; word-break: break-all; }
+  li .state { color: var(--muted); white-space: nowrap; }
+  li.ok .state { color: var(--accent); }
+  li.bad .state { color: var(--bad); }
+  li.bad .reason { display: block; color: var(--bad); font-size: 13px; margin-top: 4px; }
+  progress { width: 100%; height: 4px; }
+  .foot { margin-top: 22px; color: var(--muted); font-size: 13px; }
+  .foot b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1 id="title"></h1>
+<p class="sub" id="sub"></p>
+
+<label class="pick" for="files"><span id="pick"></span>
+  <input id="files" type="file" multiple
+         accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus">
+</label>
+
+<ul id="done"></ul>
+
+<p class="foot" id="foot"></p>
+
+<script>
+/*
+ * The page the television serves while its upload panel is open.
+ *
+ * No framework, no external asset and no build step: it is written by hand and shipped
+ * inside the APK, because the whole point of this route is that it works with nothing
+ * deployed anywhere. The pair it talks to is documented in docs/custom-music-design.md
+ * §4 — GET the page, POST one file per request to `<base>/up?name=…`, and read a
+ * `{"ok":false,"code":"…"}` answer when something is refused.
+ */
+(function () {
+  var TEXT = {
+    zh: {
+      title: '上传音乐到电视',
+      sub: '选好之后会自动上传，可以多选。',
+      pick: '选择音乐文件',
+      empty: '还没有选择文件',
+      uploading: '上传中',
+      ok: '已完成',
+      foot: '只接受 mp3 / m4a / aac / flac / wav / ogg / opus，单个文件不超过 40 MB。' +
+        '上传时请不要关闭电视上那个页面。',
+      too_large: '这一首太大了（上限 40 MB），换一首或先压缩。',
+      not_audio: '只接受 mp3 / m4a / aac / flac / wav / ogg / opus。',
+      library_full: '电视上的音乐已经满了，先在电视上删几首。',
+      no_space: '电视上没有足够的空间了。',
+      malformed: '这次上传中断了，再试一次。',
+      offline: '连接断了，回到电视上重新打开这个页面。',
+      failed: '上传失败，再试一次。'
+    },
+    en: {
+      title: 'Upload music to the TV',
+      sub: 'Pick one or more files; they upload one after another.',
+      pick: 'Choose music files',
+      empty: 'No files chosen yet',
+      uploading: 'Uploading',
+      ok: 'Done',
+      foot: 'mp3 / m4a / aac / flac / wav / ogg / opus only, up to 40 MB each. ' +
+        'Do not close the page on the TV while this runs.',
+      too_large: 'This one is too big (40 MB limit). Try another or compress it.',
+      not_audio: 'mp3 / m4a / aac / flac / wav / ogg / opus only.',
+      library_full: 'The TV music library is full. Delete a few songs on the TV first.',
+      no_space: 'The TV does not have enough space left.',
+      malformed: 'That upload was cut short. Try again.',
+      offline: 'The connection dropped. Reopen this page from the TV.',
+      failed: 'Upload failed. Try again.'
+    }
+  };
+  var lang = (navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+  var t = TEXT[lang];
+
+  var base = location.pathname.replace(/\/+$/, '');
+  var done = document.getElementById('done');
+  var busy = false;
+
+  document.documentElement.lang = lang;
+  document.getElementById('title').textContent = t.title;
+  document.getElementById('sub').textContent = t.sub;
+  document.getElementById('pick').textContent = t.pick;
+  document.getElementById('foot').textContent = t.foot;
+
+  document.getElementById('files').addEventListener('change', function (event) {
+    var files = Array.prototype.slice.call(event.target.files || []);
+    if (!files.length) return;
+    if (busy) return;
+    busy = true;
+    // One at a time, in order: the television serves one request at a time on purpose, so
+    // firing ten at once would only queue them in the socket while showing ten spinners.
+    files.reduce(function (chain, file) {
+      return chain.then(function () { return send(file); });
+    }, Promise.resolve()).then(function () {
+      busy = false;
+      event.target.value = '';
+    });
+  });
+
+  function row(name) {
+    var placeholder = done.querySelector('.placeholder');
+    if (placeholder) placeholder.remove();
+    var li = document.createElement('li');
+    var box = document.createElement('span');
+    box.className = 'name';
+    box.textContent = name;
+    var state = document.createElement('span');
+    state.className = 'state';
+    state.textContent = t.uploading;
+    var bar = document.createElement('progress');
+    bar.max = 1;
+    bar.value = 0;
+    box.appendChild(bar);
+    li.appendChild(box);
+    li.appendChild(state);
+    done.insertBefore(li, done.firstChild);
+    return { li: li, state: state, bar: bar };
+  }
+
+  function send(file) {
+    var ui = row(file.name);
+    return new Promise(function (resolve) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', base + '/up?name=' + encodeURIComponent(file.name));
+      xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable) ui.bar.value = event.loaded / event.total;
+      };
+      xhr.onload = function () {
+        var code = 'failed';
+        try {
+          var body = JSON.parse(xhr.responseText);
+          if (body && body.ok) {
+            ui.li.className = 'ok';
+            ui.state.textContent = t.ok;
+            ui.bar.remove();
+            resolve();
+            return;
+          }
+          if (body && body.code) code = body.code;
+        } catch (error) {
+          // A television that answered with something that is not JSON refused this
+          // upload; the status line below is all there is to show for it.
+        }
+        fail(ui, t[code] || t.failed);
+        resolve();
+      };
+      xhr.onerror = function () { fail(ui, t.offline); resolve(); };
+      xhr.send(file);
+    });
+  }
+
+  function fail(ui, reason) {
+    ui.li.className = 'bad';
+    ui.state.textContent = lang === 'zh' ? '失败' : 'Failed';
+    ui.bar.remove();
+    var line = document.createElement('span');
+    line.className = 'reason';
+    line.textContent = reason;
+    ui.state.appendChild(line);
+  }
+
+  if (!done.childElementCount) {
+    var placeholder = document.createElement('li');
+    placeholder.className = 'placeholder';
+    placeholder.textContent = t.empty;
+    done.appendChild(placeholder);
+  }
+})();
+</script>
+</body>
+</html>

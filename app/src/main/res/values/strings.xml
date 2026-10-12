@@ -19,6 +19,12 @@
     <string name="login_restoring">正在登录…</string>
     <string name="login_restoring_hint">正在用已保存的账号自动登录</string>
     <string name="login_restoring_slow">登录有点慢…按返回键可改用其他账号</string>
+    <!-- Shown when the token the app was using went stale — the NAS retired it while the
+         app sat idle — and it is logging in again by itself. No 返回 key here: there is
+         nothing useful behind it, and the login form appears by itself if this fails. -->
+    <string name="login_recovering">正在重新连接…</string>
+    <string name="login_recovering_hint">登录状态已过期，正在自动重新登录</string>
+    <string name="login_recovering_slow">还在重连…NAS 可能刚唤醒或暂时不可达</string>
     <string name="login_remember">已保存的账号（上下键选择，OK 直接登录）</string>
     <string name="login_failed">登录失败</string>
     <string name="host_required">请填写飞牛设备地址</string>
@@ -90,8 +96,61 @@
     <string name="viewer_music_count">%1$d 首</string>
     <string name="viewer_music_hint">上下选择 · OK 勾选 · 返回关闭</string>
 
-    <!-- Settings -->
+    <!-- Music library. The viewer's track list gained two group headings and one way in;
+         everything else belongs to the music screen that way in opens, which is also where
+         a phone uploads to and where a USB stick is looked at. -->
+    <string name="music_counts">内置 %1$d · 我的 %2$d</string>
+    <string name="music_viewer_manage">＋ 上传 / 管理背景音乐…</string>
+    <string name="music_page_hint">OK 选中／取消；长按出「排序 / 删除」，再用左右键选中要执行的一个；排序时 ↑↓ 挪位置，OK 或 Back 确认。</string>
+    <string name="music_page_empty">还没有音乐 —— 用左边二维码从手机上传，或者把文件拷进曲库目录。</string>
+    <string name="music_directory">曲库目录</string>
+    <string name="music_directory_hint">上传的音乐放在这里；用数据线或文件管理器拷进来的文件也算。</string>
+    <string name="music_restore_builtin">恢复内置曲目</string>
+    <string name="music_restore_builtin_hint">把删掉的内置曲目放回列表末尾（它的文件在 APK 里删不掉，删除只是从列表里去掉）。</string>
+    <string name="music_restore_builtin_done">内置曲目已恢复</string>
+    <string name="music_row_sort">排序</string>
+    <string name="music_row_delete">删除</string>
+    <string name="music_upload_step_1">1. 手机连到和电视同一个 Wi-Fi</string>
+    <string name="music_upload_step_2">2. 扫码打开上传页（或用浏览器输入上面的地址）</string>
+    <string name="music_upload_step_3">3. 选 mp3，可多选；传完出现在右边最上面</string>
+    <string name="settings_music_upload">上传背景音乐</string>
+    <string name="settings_music_upload_value">扫码上传</string>
+    <string name="settings_music_upload_hint">手机扫码把歌传到电视；页面右下角写着曲库目录，用数据线拷进去也一样。</string>
+    <string name="music_usage">占用</string>
+    <string name="music_usage_value">已用 %1$s / %2$s</string>
+    <string name="music_deleted">已删除 %1$s</string>
+    <string name="music_clear">清空我的音乐</string>
+    <string name="music_clear_value">%1$d 首上传</string>
+    <string name="music_clear_hint">删掉曲库目录里的这些文件（拷进去的也算）。内置那首不受影响。</string>
+    <string name="music_cleared">已清空上传的音乐</string>
+    <string name="music_ticked">已选</string>
+    <string name="music_source_builtin">内置</string>
+    <string name="music_source_upload">手机上传</string>
+    <string name="music_upload_title">上传背景音乐</string>
+    <string name="music_upload_preparing">正在准备…</string>
+    <string name="music_upload_no_address">没能读到这台电视的局域网地址。确认电视已联网，再按 Back 重进这一页。</string>
+    <string name="music_upload_qr_description">上传页面的二维码</string>
+    <string name="music_upload_received">已收到 %1$d 首 · %2$s</string>
+    <string name="music_upload_stay">上传期间请留在这一页；扫码打不开就检查手机是不是同一个 Wi-Fi、路由器有没有开 AP 隔离。</string>
+    <string name="music_upload_fail_too_large">太大，已跳过</string>
+    <string name="music_upload_fail_not_audio">不是音频，已跳过</string>
+    <string name="music_upload_fail_library_full">曲库已满</string>
+    <string name="music_upload_fail_no_space">电视空间不足</string>
+    <string name="music_upload_fail_failed">上传失败</string>
+
+    <!-- Settings. One pane per sub-menu entry on the left, because the whole page had
+         grown taller than a 1080p screen: a scrolling column with twenty rows in it is a
+         page nobody can find anything on, and the rows a person actually came for were
+         scattered down it by whatever order they happened to be added in. -->
     <string name="settings_title">设置</string>
+    <string name="settings_submenu_hint">上下选择分类，右键进入</string>
+    <string name="settings_pane_version">版本升级</string>
+    <string name="settings_pane_general">通用</string>
+    <string name="settings_pane_slideshow">幻灯片设置</string>
+    <string name="settings_pane_review">图评设置</string>
+    <string name="settings_update_caption">检查有没有新版本，有的话在这里下载安装。</string>
+    <string name="settings_version_hint">当前安装的版本。</string>
+    <string name="settings_general_caption">主题、预览画质、缓存，以及这台设备的连接信息。</string>
     <string name="settings_server">服务器</string>
     <string name="settings_account">账号</string>
     <string name="settings_version">版本</string>
@@ -105,12 +164,36 @@
     <string name="settings_preview_original_no">否</string>
     <string name="settings_preview_original_slideshow">仅用于幻灯片播放</string>
     <string name="settings_preview_original_hint">原图更清晰；大缩略图加载更快、更省流量。</string>
+    <string name="settings_preview_original_global_hint">看照片时用原图还是大缩略图。</string>
     <string name="settings_cache">清除图片缓存</string>
     <string name="settings_cache_cleared">缓存已清除</string>
     <string name="settings_cache_usage">已用 %1$s / %2$s</string>
     <string name="settings_cache_measuring">读取中…</string>
     <string name="settings_last_crash">上次崩溃</string>
     <string name="settings_crash_none">无</string>
+
+    <!-- 屏保相册. One album, chosen from a list in 设置 → 通用, played as a slideshow once
+         nobody has touched the remote for a while. The list holds every album the account
+         can see, its own and the ones shared with it, because a television choosing what to
+         play in a room is not asking who owns the album. -->
+    <string name="settings_screen_saver">屏保相册</string>
+    <string name="settings_screen_saver_hint">长时间没有操作时，自动全屏循环播放这个相册；按任意键回到刚才的画面。</string>
+    <string name="screen_saver_unset">未指定</string>
+    <string name="screen_saver_badge">屏保</string>
+    <string name="screen_saver_pick_title">选择屏保相册</string>
+    <string name="screen_saver_pick_hint">上下选择，OK 确认，返回键取消</string>
+    <string name="screen_saver_pick_empty">还没有相册可用来做屏保</string>
+    <string name="screen_saver_none">不指定</string>
+    <string name="screen_saver_none_hint">关闭屏保相册，不再自动播放</string>
+
+    <!-- 幻灯片设置. The same preferences the viewer's 幻灯片 row edits - one interval and
+         one order, two doors. The viewer is where they are usually changed, but a
+         slideshow is often set up before anyone is looking at a photo, and getting to that
+         row means opening a picture and pressing 幻灯片 first. -->
+    <string name="settings_slideshow_interval_hint">每张照片停留的时间。</string>
+    <string name="settings_slideshow_order_hint">顺序按列表走；随机从全部照片里抽。放映时幻灯片只走照片，视频会跳过。</string>
+    <string name="settings_slideshow_music">背景音乐</string>
+    <string name="settings_slideshow_same_hint">与查看器里「幻灯片」控制条上的同一设置共用一份值，改这里和改那里是一样的。</string>
 
     <!-- Update check. Every value here is a state of one row, because a television has
          no second way in: no dialog to dismiss and nothing that can be typed. -->
@@ -119,6 +202,7 @@
     <string name="settings_update_checking">检查中…</string>
     <string name="settings_update_up_to_date">已是最新版本</string>
     <string name="settings_update_available">有新版本 %1$s</string>
+    <string name="settings_update_badge_hint">主菜单「设置」上有一个红点。</string>
     <string name="settings_update_downloading">正在下载 %1$d%%</string>
     <string name="settings_update_needs_permission">需要允许安装</string>
     <string name="settings_update_ready">已下载</string>
@@ -144,8 +228,9 @@
     <string name="settings_review_all">全部</string>
     <string name="settings_review_hint">电视上出现二维码，客人扫码把评论发上来，评论以弹幕飘过。</string>
     <string name="settings_review_server">图评服务器</string>
+    <string name="settings_review_server_save">保存</string>
     <string name="settings_review_server_unset">未设置</string>
-    <string name="settings_review_server_hint">手机能访问到的地址，例如 192.168.31.14:8080；服务器配了证书就填 https://开头的。留空即关闭图评。</string>
+    <string name="settings_review_server_hint">图片评论的服务器。</string>
     <string name="settings_review_status">图评连接状态</string>
     <string name="settings_review_scope">上传范围</string>
     <string name="settings_review_scope_current">当前相册</string>

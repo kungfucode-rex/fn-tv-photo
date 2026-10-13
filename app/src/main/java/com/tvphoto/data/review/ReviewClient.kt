@@ -110,6 +110,41 @@ class ReviewClient(
             response.use { parseIdentity(it, candidate.localId) }
         }
 
+    /**
+     * Asks whether this device has already registered this picture, and uploads nothing.
+     *
+     * The album end's only handle on a photo before the server has spoken is the id its own
+     * library uses, and this is the call that turns it into a code, an image id and a
+     * comment count — or into null, which means "nobody has ever opened 图评 on this one"
+     * (docs/tuping-design.md §17.28).
+     *
+     * **A 404 is success with a null answer, not a failure.** It is the ordinary state of
+     * most of a library, and treating it as an error would put "图评连不上" on the settings
+     * row of a deployment that is working perfectly. Only a real failure — nothing answered,
+     * or the device token was refused — comes back as a failed `Result`.
+     */
+    suspend fun lookupPhoto(source: String, localId: String): Result<ReviewIdentity?> = call {
+        val url = base!!.newBuilder()
+            .addPathSegments("v1/photos/by-local")
+            .addQueryParameter("source", source)
+            .addQueryParameter("localId", localId)
+            .build()
+
+        val response = http.newCall(
+            Request.Builder()
+                .url(url)
+                .header("X-Device-Id", deviceId)
+                .header("X-Device-Token", deviceToken)
+                .get()
+                .build(),
+        ).executeSync()
+
+        response.use { result ->
+            if (result.code == 404) return@use Result.success(null)
+            parseIdentity(result, localId)
+        }
+    }
+
     /** The comments on a photo, oldest first. [since] is exclusive, in milliseconds. */
     suspend fun comments(imageId: String, since: Long = 0, limit: Int = 50): Result<List<ReviewComment>> =
         call {

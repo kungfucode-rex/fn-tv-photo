@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.5.7"
+val appVersionName = "1.5.8"
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -280,7 +280,34 @@ android {
         // lacks it. 32's entry below is what 1.5.6 was; this is that plus the screensaver and
         // the fact that a screensaver album now registers its photos (so their comments exist)
         // and fetches them without holding a socket open.
-        versionCode = 33
+        // 34 is 1.5.8, which is 33 with the number moved for the usual reason — a television's
+        // installer refuses to lay a build over another with the same versionCode — and one
+        // product decision behind it: **图评 uploads nothing until somebody asks.**
+        //
+        // Two complaints from one household started it, and both were measurements rather than
+        // opinions. (1) "Three devices played the album for two days and used 50 GB — where is
+        // that 5 GB cache?" It was capped at a flat 5 GB while the device had 3.6 GB free, so
+        // Android purged it and every pass re-downloaded all 217 photos; the budget is now
+        // min(5 GB, a quarter of the free space) and the settings row says what it settled on.
+        // (2) "I moved the tunnel and the old QR codes still open the old IP" — `codes.base_url`
+        // is frozen at registration and re-registering reuses it, so the server grew
+        // `POST /v1/admin/codes/rebind` and the app re-reads the PNG.
+        //
+        // The headline came out of asking again: a photo reaches the server only when somebody
+        // presses something. Browsing uploads nothing. The viewer's 图评 menu became one button,
+        // **扫码评论** — register this photo, put the band away, show the code, turn the danmaku
+        // on — and a photo the server already knows is recognised through a read-only
+        // `GET /v1/photos/by-local`, so its code and its comments come back without a second
+        // upload. The danmaku draws what the server has and nothing when it has nothing. The
+        // party case survives behind the slideshow row's 图评 switch, which now defaults to 关,
+        // and the corner's two 图评 controls are not drawn at all until a server address exists.
+        // Two dead settings went with it: 上传范围 (stored, drawn, never read) and the 图评
+        // menu's second danmaku switch, which said what 弹幕数量's 关 already said.
+        //
+        // 图评 wants the 0.1.3 server for that lookup path: against an older one a photo reads
+        // as "not on the server" until 扫码评论 is pressed again, because a 404 is exactly what
+        // "nobody has opened 图评 on it" means.
+        versionCode = 34
         versionName = appVersionName
 
         // How long the app may sit untouched before the 屏保相册 starts playing. The release

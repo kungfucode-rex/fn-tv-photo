@@ -280,6 +280,74 @@ func (s *Server) handlePhotoGet(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handlePhotoByLocal is GET /v1/photos/by-local?source=…&localId=…: "have I already
+// registered this picture?" answered as a read (docs/tuping-design.md §17.28).
+//
+// This is what makes an album end able to show a photo's code and its comments **without
+// uploading anything**. The device's own local id is the only handle it has before the
+// server has spoken — `image_id` is a ULID it cannot compute — and `device_local` is where
+// the server recorded the answer the first time somebody asked for this photo to be
+// commentable. A miss is a 404 and means exactly one thing: nobody has ever opened 图评 on
+// this picture from this device, so it is not on the server at all.
+//
+// Deliberately a *read*: no row is created, no thumbnail is stored, no counter moves. The
+// alternative — registering on every photo the viewer happens to show — is what filled a
+// database with an album nobody had looked at, and the whole point of §17.28 is that the
+// only thing that puts a picture here is somebody asking for one.
+func (s *Server) handlePhotoByLocal(w http.ResponseWriter, r *http.Request) {
+	deviceID, ok := s.requireDevice(w, r)
+	if !ok {
+		return
+	}
+
+	source := strings.TrimSpace(r.URL.Query().Get("source"))
+	localID := strings.TrimSpace(r.URL.Query().Get("localId"))
+	if source == "" || localID == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "需要 source 和 localId")
+		return
+	}
+
+	code, found, err := s.store.DevicePhoto(r.Context(), deviceID, source, localID)
+	if err != nil {
+		s.serverError(w, err)
+		return
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "not_found", "这台设备还没给这张照片开过图评")
+		return
+	}
+
+	// Resolved through the code rather than straight from the image id, so this answer and
+	// `GET /v1/photos/{code}` are built by the same path: merges followed, comment count
+	// summed over the group, and the address taken from wherever the code actually lives.
+	target, err := s.store.ResolveCode(r.Context(), code)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not_found", "这张照片不在图评里")
+			return
+		}
+		s.serverError(w, err)
+		return
+	}
+
+	caller := s.callerBase(r)
+	writeJSON(w, http.StatusOK, photoDetail{
+		// The root of the merge group, exactly as `GET /v1/photos/{code}` answers it: the
+		// album end keys its cache by local id and then fetches comments by this id, so two
+		// endpoints disagreeing about it would be two threads for one picture.
+		ImageID:      target.Photo.ID,
+		Code:         target.Code,
+		Scope:        target.Scope.String(),
+		CommentCount: target.Photo.CommentCount,
+		ThumbURL:     s.ThumbURL(target.Code, phash.CanonicalWidth, target, caller),
+		QRURL:        fmt.Sprintf("%s/v1/qr/%s.png?size=%d", s.pageBase(target, caller), target.Code, 440),
+		Width:        target.Photo.Width,
+		Height:       target.Photo.Height,
+		Visibility:   target.Photo.Visibility,
+		ServerTime:   time.Now().UnixMilli(),
+	})
+}
+
 // handlePhotoDelete is the album owner's one-press delete: the photo, its codes,
 // its thumbnail and every comment on it (§12.5).
 func (s *Server) handlePhotoDelete(w http.ResponseWriter, r *http.Request) {

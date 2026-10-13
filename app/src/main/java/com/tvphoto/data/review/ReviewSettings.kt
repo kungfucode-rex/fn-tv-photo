@@ -35,29 +35,6 @@ enum class ReviewMode(val id: String) {
 }
 
 /**
- * Whether every album the app can reach is offered to 图评, or only the one being
- * browsed.
- *
- * The default is [CURRENT]: browsing a photo library is not the same as agreeing to
- * upload a thumbnail of the whole thing to a server, and the two have to be separate
- * decisions (docs/tuping-design.md §9.4).
- */
-enum class ReviewUploadScope(val id: String) {
-    CURRENT("current"),
-    ALL("all"),
-
-    ;
-
-    fun next(): ReviewUploadScope = entries[(ordinal + 1) % entries.size]
-
-    companion object {
-        val DEFAULT = CURRENT
-
-        fun fromId(id: String?): ReviewUploadScope? = entries.firstOrNull { it.id == id }
-    }
-}
-
-/**
  * How much danmaku to draw.
  *
  * One value governs the text size, how much history is replayed and **how many rows the band
@@ -197,10 +174,18 @@ class ReviewSettingsStore(context: Context) {
         get() = ReviewMode.fromId(prefs.getString(KEY_MODE, null)) ?: ReviewMode.DEFAULT
         set(value) = prefs.edit().putString(KEY_MODE, value.id).apply()
 
-    var uploadScope: ReviewUploadScope
-        get() = ReviewUploadScope.fromId(prefs.getString(KEY_SCOPE, null)) ?: ReviewUploadScope.DEFAULT
-        set(value) = prefs.edit().putString(KEY_SCOPE, value.id).apply()
-
+    /**
+     * How much danmaku to draw — and whether to draw any at all: `off` is the switch.
+     *
+     * One value rather than a boolean beside an amount, which is what this used to be. The
+     * two overlapped (either one could mean "nothing on screen") and the settings screen has
+     * always offered the three words, so the boolean was a second way to say what `off`
+     * already says (docs/tuping-design.md §17.29).
+     *
+     * Changed from **设置 → 图评设置**, not from the viewer: since §17.29 the viewer's corner
+     * has one button — 扫码评论 — which opens 图评 on the photo and turns this to `少` if it
+     * was `off`. Turning the layer *off* is a preference, and preferences live in Settings.
+     */
     var danmakuLevel: DanmakuLevel
         get() = DanmakuLevel.fromId(prefs.getString(KEY_DANMAKU, null)) ?: DanmakuLevel.DEFAULT
         set(value) = prefs.edit().putString(KEY_DANMAKU, value.id).apply()
@@ -218,43 +203,23 @@ class ReviewSettingsStore(context: Context) {
         set(value) = prefs.edit().putBoolean(KEY_EXTEND, value).apply()
 
     /**
-     * Whether 图评 runs while a slideshow is playing.
+     * Whether the *slideshow* carries 图评, so its photos are registered as they appear.
      *
-     * The one question about 图评 that is genuinely about the *slideshow* rather than about
-     * a photo, which is why it lives in the viewer's slideshow settings rather than in the
-     * per-photo 图评 menu: a host running a party slideshow decides once whether the corner
-     * of every picture carries a code, and that is a decision about the show.
+     * The one question about 图评 that is genuinely about the *slideshow* rather than about a
+     * photo, which is why it lives in the viewer's slideshow settings rather than in the
+     * per-photo 图评 menu: a host running a party slideshow decides once that the whole
+     * rotation is commentable, and nobody is holding the remote to press anything on each
+     * picture (docs/tuping-design.md §17.28).
      *
-     * On by default, because a slideshow is the moment the QR code exists for
-     * (docs/tuping-design.md §9.5).
+     * **Off by default, and that is the change §17.28 made.** It used to be on, which meant
+     * a show uploaded every photo it played without anybody asking — the behaviour that put
+     * an entire album in the database of a room nobody was in. Pressing 图评 on a photo is
+     * still the way to make *that* photo commentable, and this switch is the only thing that
+     * ever registers a photo nobody pressed anything on.
      */
     var slideshowEnabled: Boolean
-        get() = prefs.getBoolean(KEY_SLIDESHOW, true)
+        get() = prefs.getBoolean(KEY_SLIDESHOW, false)
         set(value) = prefs.edit().putBoolean(KEY_SLIDESHOW, value).apply()
-
-    /**
-     * Whether the QR code is drawn on a photo.
-     *
-     * One of the two display switches the viewer's 图评 button owns; the other is the
-     * danmaku level. They are separate from [mode] on purpose: the mode says whether 图评 is
-     * running at all — and it has to keep running even with both of these off, because the
-     * 评论 N line comes from the same registration — while these two say what of it is
-     * drawn.
-     */
-    var showQr: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_QR, true)
-        set(value) = prefs.edit().putBoolean(KEY_SHOW_QR, value).apply()
-
-    /**
-     * Whether the danmaku layer is drawn.
-     *
-     * Distinct from [danmakuLevel] being `off`, which is the same picture but reached by
-     * stepping the amount down; keeping both means the amount a person chose survives
-     * turning the layer off and on again.
-     */
-    var showDanmaku: Boolean
-        get() = prefs.getBoolean(KEY_SHOW_DANMAKU, true)
-        set(value) = prefs.edit().putBoolean(KEY_SHOW_DANMAKU, value).apply()
 
     /** The device token this app was issued, or blank if it has never registered. */
     var deviceToken: String
@@ -292,12 +257,9 @@ class ReviewSettingsStore(context: Context) {
         const val PREFS = "tv_photo_review"
         const val KEY_SERVER = "server_url"
         const val KEY_MODE = "mode"
-        const val KEY_SCOPE = "upload_scope"
         const val KEY_DANMAKU = "danmaku_level"
         const val KEY_EXTEND = "extend_stay"
         const val KEY_SLIDESHOW = "slideshow_enabled"
-        const val KEY_SHOW_QR = "show_qr"
-        const val KEY_SHOW_DANMAKU = "show_danmaku"
         const val KEY_DEVICE_ID = "device_id"
         const val KEY_DEVICE_TOKEN = "device_token"
         const val KEY_OWNER_TOKEN = "owner_token"

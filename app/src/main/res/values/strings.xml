@@ -168,6 +168,7 @@
     <string name="settings_cache">清除图片缓存</string>
     <string name="settings_cache_cleared">缓存已清除</string>
     <string name="settings_cache_usage">已用 %1$s / %2$s</string>
+    <string name="settings_cache_capped">按设备剩余空间调低（上限 %1$s）</string>
     <string name="settings_cache_measuring">读取中…</string>
     <string name="settings_last_crash">上次崩溃</string>
     <string name="settings_crash_none">无</string>
@@ -232,10 +233,7 @@
     <string name="settings_review_server_unset">未设置</string>
     <string name="settings_review_server_hint">图片评论的服务器。</string>
     <string name="settings_review_status">图评连接状态</string>
-    <string name="settings_review_scope">上传范围</string>
-    <string name="settings_review_scope_current">当前相册</string>
-    <string name="settings_review_scope_all">全部相册</string>
-    <string name="settings_review_danmaku">弹幕</string>
+    <string name="settings_review_danmaku_amount">弹幕数量</string>
     <string name="settings_review_danmaku_off">关</string>
     <string name="settings_review_danmaku_few">少</string>
     <string name="settings_review_danmaku_many">多</string>
@@ -251,11 +249,11 @@
     <string name="viewer_comments">评论 %1$d</string>
     <string name="viewer_qr_hint">扫码加评论</string>
 
-    <!-- The 图评 button in the viewer's corner, and the three rows its menu opens. -->
-    <string name="viewer_action_review">图评</string>
-    <string name="viewer_review_qr">二维码</string>
-    <string name="viewer_review_danmaku">弹幕</string>
-    <string name="viewer_review_danmaku_amount">弹幕数量</string>
+    <!-- The 扫码评论 button in the viewer's corner. The label is the *intent* rather than the
+         feature's name: somebody standing in front of a photo wants guests to comment on it,
+         and "图评" is what this repository calls the machinery. -->
+    <string name="viewer_action_scan">扫码评论</string>
+    <string name="viewer_scan_opened">已开图评，让客人扫这张码</string>
     <string name="settings_review_slideshow_on">图评</string>
 
     <!-- The two words a switch shows. Not 是/否: these rows turn a *layer* on and off

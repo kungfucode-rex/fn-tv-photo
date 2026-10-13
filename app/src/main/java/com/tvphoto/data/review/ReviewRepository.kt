@@ -95,8 +95,12 @@ class ReviewRepository(
     private data class OpenRequest(
         val item: MediaItem,
         val source: String,
-        val wanted: Boolean,
+        val decision: ReviewDecision,
         val danmakuLevel: DanmakuLevel,
+        /** Whether this was a screensaver, where the code is never drawn (see [openPhoto]). */
+        val screenSaver: Boolean,
+        /** Whether a show was running, which the 幻灯片 row's own 图评 switch governs. */
+        val slideshow: Boolean,
     )
 
     private val _view = MutableStateFlow<ReviewView>(ReviewView.Hidden)
@@ -224,12 +228,17 @@ class ReviewRepository(
      * would mint two codes for one picture and fetch two QR PNGs. That is not hypothetical:
      * a replaced server makes both of this file's conclusions true at once, since the retry
      * of the old identity's history read comes back `not_found` right after the repair.
+     *
+     * Registration, not a lookup: the whole point is that the server has *lost* this
+     * picture, so asking whether it knows it would answer no and change nothing.
      */
     private fun reRegisterCurrentPhoto() {
         if (_view.value !is ReviewView.Ready) return
         val last = lastOpen ?: return
         Log.i(TAG, "图评: registering ${last.item.id} again; its code came from the old server")
-        openPhoto(last.item, last.source, last.wanted, last.danmakuLevel)
+        scope.launch {
+            register(last.item, last.source, PhotoIdentity.localId(last.source, last.item), !last.screenSaver)
+        }
     }
 
     /**
@@ -317,45 +326,43 @@ class ReviewRepository(
     }
 
     /**
-     * Shows 图评 for one photo, or hides it.
+     * Shows 图评 for one photo, or hides it — **without uploading anything**.
      *
-     * [wanted] is the caller's decision — the mode setting, whether the slideshow is
-     * running, whether the thing on screen is a video. Handing it in rather than reading
-     * it here keeps the "is this photo eligible" question where the facts are.
+     * [decision] is the caller's answer to "what should happen about 图评 here", computed
+     * from the mode, the address and the display switches (`reviewDecision`). Handing it in
+     * rather than reading it here keeps the "is this photo eligible" question where the
+     * facts are.
+     *
+     * What this never does is register a photo nobody asked about (§17.28). A photo the
+     * server does not know comes back [ReviewDecision.LOOKUP]-and-miss, which is drawn as
+     * nothing at all and logged; the way onto the server is [armPhoto], which a person has
+     * to press. [ReviewDecision.REGISTER] is the show whose own 图评 switch is on, where the
+     * host asked for the whole rotation.
+     *
+     * [screenSaver] decides two things left to say here: whether the code's picture is worth
+     * fetching at all (a screensaver never draws one) and *why* nothing is being shown.
+     * [slideshow] is carried for the log line's sake — a show whose 图评 switch is off is a
+     * third way for a photo to be left alone, and a line that blamed the mode or the address
+     * for one of those would be the "a line that names the wrong cause is worse than none"
+     * mistake this method's logging exists to avoid.
      */
     fun openPhoto(
         item: MediaItem?,
         source: String,
-        wanted: Boolean,
+        decision: ReviewDecision,
         danmakuLevel: DanmakuLevel,
+        screenSaver: Boolean = false,
+        slideshow: Boolean = false,
     ) {
         // Kept before anything can return, so a repair triggered by this very photo can
         // register it again from the same request.
-        lastOpen = item?.let { OpenRequest(it, source, wanted, danmakuLevel) }
+        lastOpen = item?.let { OpenRequest(it, source, decision, danmakuLevel, screenSaver, slideshow) }
         closeSocket()
 
-        if (!wanted || item == null || item.isVideo) {
+        if (decision == ReviewDecision.HIDDEN || item == null || item.isVideo) {
             currentLocalId = null
             _view.value = ReviewView.Hidden
-            // Said out loud, because "已连接 in the settings, no code on the photo" has
-            // several unrelated causes and this is only a log — there is no console on a
-            // television, and a line that names the wrong cause is worse than none.
-            //
-            // The previous version of this line blamed the mode unconditionally, which sent
-            // one diagnosis in the wrong direction: the actual reason was an EMPTY SERVER
-            // ADDRESS, and the mode was fine. Each cause is named separately now.
-            val reason = when {
-                item == null -> "nothing on screen"
-                item.isVideo -> "it is a video"
-                settings.serverUrl.isBlank() -> "no server address is set"
-                settings.mode == ReviewMode.OFF -> "the mode is 关"
-                else -> "the caller said no"
-            }
-            Log.i(
-                TAG,
-                "图评: not registering photo ${item?.id ?: "none"} — $reason " +
-                    "(wanted=$wanted, video=${item?.isVideo ?: true}, mode=${settings.mode.id})",
-            )
+            logHidden(item, decision, danmakuLevel, screenSaver, slideshow)
             return
         }
 
@@ -364,29 +371,167 @@ class ReviewRepository(
 
         val cached = identities[identityKey(localId)]
         if (cached != null) {
-            _view.value = ReviewView.Ready(
-                identity = cached,
-                qrFile = qrFileFor(cached.code),
-                commentCount = cached.commentCount,
-                comments = commentCache[cached.imageId]?.toList().orEmpty(),
-                status = _status.value,
-            )
-            refreshComments(cached)
+            // Published here rather than on a coroutine: the answer is already in hand, and
+            // leaving the *previous* photo's answer up for a frame is the bug the viewer's
+            // own note about a page turn describes — one frame of the last picture's code
+            // over this one.
+            publishReady(cached, qrFileFor(cached.code))
             return
         }
 
-        // Nothing cached: say "preparing" rather than showing a code that is not there
-        // yet. The viewer draws nothing either way, so the state exists for the tests and
-        // for the settings page's diagnostics.
+        // Nothing cached: say "preparing" rather than showing a code that is not there yet.
+        // The viewer draws nothing either way, so the state exists for the tests and for the
+        // settings page's diagnostics.
         _view.value = ReviewView.Preparing
-        scope.launch { register(item, source, localId) }
+        scope.launch {
+            val known = lookup(source, localId)
+            if (known != null) {
+                // Refreshed, not taken from the cache: a lookup is the moment the server gets
+                // to say which address this code opens, and `POST /v1/admin/codes/rebind`
+                // exists precisely because that answer can change under a code that stays the
+                // same (§17.27). A few kilobytes per photo per session, and the reason a
+                // rebind only needs the television restarted.
+                publishReady(known, if (screenSaver) qrFileFor(known.code) else fetchQr(known.code, refresh = true))
+                return@launch
+            }
+            // A miss. Only a show that carries 图评 registers by itself; anything else stays
+            // off the server until somebody asks for it.
+            if (decision == ReviewDecision.REGISTER) {
+                register(item, source, localId, qrNeeded = !screenSaver)
+                return@launch
+            }
+            Log.i(
+                TAG,
+                "图评: ${item.id} is not on the server — nobody has opened 图评 on it. " +
+                    "Press 扫码评论 to put it there; nothing was uploaded.",
+            )
+            if (currentLocalId == localId) _view.value = ReviewView.Hidden
+        }
+    }
+
+    /**
+     * The explicit act: put *this* photo on the server, so it can be commented on.
+     *
+     * Bound to the viewer's 图评 row, and the only path in the app that uploads a thumbnail
+     * outside a show (§17.28). Everything after it is the existing machinery — identity
+     * matching, a short code, the QR picture — so a photo that was registered from another
+     * television or another album comes back as the same identity with the same thread.
+     *
+     * Arming twice is harmless and does not upload twice: the second call answers from the
+     * session's cache, or from the server's own `device_local` row, which is what
+     * `POST /v1/photos` has always done for a photo it already knows (§6.2).
+     */
+    fun armPhoto(
+        item: MediaItem?,
+        source: String,
+        danmakuLevel: DanmakuLevel,
+        screenSaver: Boolean = false,
+        slideshow: Boolean = false,
+    ) {
+        if (item == null || item.isVideo) return
+        lastOpen = OpenRequest(item, source, ReviewDecision.LOOKUP, danmakuLevel, screenSaver, slideshow)
+
+        val localId = PhotoIdentity.localId(source, item)
+        currentLocalId = localId
+
+        val cached = identities[identityKey(localId)]
+        if (cached != null) {
+            publishReady(cached, qrFileFor(cached.code))
+            return
+        }
+        _view.value = ReviewView.Preparing
+        scope.launch { register(item, source, localId, qrNeeded = !screenSaver) }
+    }
+
+    /**
+     * Publishes the answer for a photo the server knows, with the code's picture already
+     * resolved by the caller.
+     *
+     * [qr] is a parameter rather than something this fetches, and that is what keeps the
+     * previous photo's answer from staying on screen for a frame: a caller that has the
+     * identity in hand publishes at once (with whatever file is on disk), and a caller that
+     * had to ask the server fetches the picture first and publishes when it arrives — which
+     * is what `ReviewView.Preparing` is for.
+     */
+    private fun publishReady(identity: ReviewIdentity, qr: File?) {
+        if (currentLocalId != identity.localId) return
+        _view.value = ReviewView.Ready(
+            identity = identity,
+            qrFile = qr,
+            commentCount = identity.commentCount,
+            comments = commentCache[identity.imageId]?.toList().orEmpty(),
+            status = _status.value,
+        )
+        refreshComments(identity)
+    }
+
+    /**
+     * Asks the server whether it already knows this picture, and caches a yes.
+     *
+     * A miss returns null rather than failing: it is the ordinary answer for a photo nobody
+     * has opened 图评 on, and it has to be as quiet as one (§17.28). A *failure* — nothing
+     * answered, or the device token was refused — also returns null here, because the caller
+     * has already reported it: [withDeviceRetry] reports a refusal and repairs the device,
+     * and the view stays hidden either way.
+     */
+    private suspend fun lookup(source: String, localId: String): ReviewIdentity? {
+        if (!ensureDevice()) return null
+        val found = withDeviceRetry { client -> client.lookupPhoto(source, localId) }
+        return found.fold(
+            onSuccess = { identity ->
+                if (identity != null) {
+                    identities[identityKey(localId)] = identity
+                    _status.value = ReviewStatus.Online(client()?.server.orEmpty(), System.currentTimeMillis())
+                }
+                identity
+            },
+            onFailure = { error ->
+                report(client()?.server.orEmpty(), error)
+                null
+            },
+        )
+    }
+
+    /** The one log line that says why nothing is on screen; see [openPhoto]. */
+    private fun logHidden(
+        item: MediaItem?,
+        decision: ReviewDecision,
+        danmakuLevel: DanmakuLevel,
+        screenSaver: Boolean,
+        slideshow: Boolean,
+    ) {
+        // Said out loud, because "已连接 in the settings, no code on the photo" has several
+        // unrelated causes and this is only a log — there is no console on a television, and
+        // a line that names the wrong cause is worse than none.
+        //
+        // The previous version of this line blamed the mode unconditionally, which sent one
+        // diagnosis in the wrong direction: the actual reason was an EMPTY SERVER ADDRESS,
+        // and the mode was fine. Each cause is named separately now.
+        val danmakuOn = danmakuDrawn(danmakuLevel)
+        val reason = when {
+            item == null -> "nothing on screen"
+            item.isVideo -> "it is a video"
+            settings.serverUrl.isBlank() -> "no server address is set"
+            settings.mode == ReviewMode.OFF -> "the mode is 关"
+            screenSaver && !danmakuOn ->
+                "a screensaver draws no code and the danmaku is off, so there is nothing to ask for"
+            else -> "the caller said no (decision=$decision)"
+        }
+        Log.i(
+            TAG,
+            "图评: nothing for photo ${item?.id ?: "none"} — $reason " +
+                "(decision=$decision, mode=${settings.mode.id}, " +
+                "level=${danmakuLevel.id}, screensaver=$screenSaver, slideshow=$slideshow)",
+        )
     }
 
     /**
      * Registers a photo ahead of it being looked at, like the image prefetcher does.
      *
      * Best effort and silent: pre-registering must never be the reason the photo the user
-     * actually opened is late (docs/tuping-design.md §9.2).
+     * actually opened is late (docs/tuping-design.md §9.2). Only ever called by a show whose
+     * own 图评 switch is on — that is the one mode in which a photo nobody pressed anything
+     * on is allowed onto the server (§17.28).
      */
     fun preRegister(candidates: List<ReviewCandidate>, source: String) {
         if (candidates.isEmpty()) return
@@ -403,8 +548,10 @@ class ReviewRepository(
                         .getOrNull()?.let { identity ->
                             identities[key] = identity
                             // The QR PNG is what the TV actually needs in hand, so it is
-                            // fetched here rather than when the photo appears.
-                            fetchQr(identity.code)
+                            // fetched here rather than when the photo appears — and
+                            // refreshed, because this answer is the server's current word
+                            // on what that code encodes (see [fetchQr]).
+                            fetchQr(identity.code, refresh = true)
                         }
                 }
                 // One at a time, and slowly: pre-registration competes with the photos
@@ -516,7 +663,17 @@ class ReviewRepository(
 
     // ------------------------------------------------------------------ work
 
-    private suspend fun register(item: MediaItem, source: String, localId: String) {
+    /**
+     * Uploads the canonical thumbnail and turns the answer into a view.
+     *
+     * Reached from two places only, and both of them are somebody asking for this picture to
+     * be commentable: [armPhoto] (the viewer's 图评 row) and the show whose own 图评 switch is
+     * on. Nothing else in the app calls it, which is what "no photo reaches the server until
+     * a person asks" means in code (§17.28).
+     *
+     * [qrNeeded] is whether the code's PNG is worth fetching: a screensaver never draws one.
+     */
+    private suspend fun register(item: MediaItem, source: String, localId: String, qrNeeded: Boolean) {
         // `ensureDevice` first, and the client built *after* it — not before.
         //
         // The client snapshots the device token when it is constructed, so a client built
@@ -548,19 +705,21 @@ class ReviewRepository(
         withDeviceRetry { client -> client.registerPhoto(candidate, source) }.fold(
             onSuccess = { identity ->
                 identities[identityKey(localId)] = identity
-                val qr = fetchQr(identity.code)
+                // Refreshed rather than taken from the cache: this is a fresh answer from
+                // the server about *this* code, and the picture it hands over is the only
+                // thing that knows which address the code currently opens (see [fetchQr]).
+                val qr = if (qrNeeded) fetchQr(identity.code, refresh = true) else qrFileFor(identity.code)
                 _status.value = ReviewStatus.Online(server, System.currentTimeMillis())
                 // The user may have moved on while this was in flight. Publishing then
-                // would put this photo's code over a different one.
+                // would put this photo's code over a different one — and [publishReady] is
+                // what checks that, for this path and the lookup's alike.
                 if (currentLocalId == localId) {
-                    _view.value = ReviewView.Ready(
-                        identity = identity,
-                        qrFile = qr,
-                        commentCount = identity.commentCount,
-                        comments = commentCache[identity.imageId]?.toList().orEmpty(),
-                        status = _status.value,
-                    )
-                    startLive()
+                    publishReady(identity, qr)
+                    // No socket from here. The viewer opens one when the identity that just
+                    // arrived is the photo it is actually showing (see its effect on
+                    // `reviewReady`), and doing it here as well is how two subscriptions for
+                    // one photo happened: only the last was remembered, so the other one was
+                    // never closed.
                 }
             },
             onFailure = { error ->
@@ -644,10 +803,22 @@ class ReviewRepository(
         cachedBytes(url)
     }.getOrNull()
 
-    /** Fetches a QR PNG once and writes it where Coil can load it as a file. */
-    private suspend fun fetchQr(code: String): File? {
+    /**
+     * Fetches a QR PNG once and writes it where Coil can load it as a file.
+     *
+     * [refresh] is the difference between "the server just answered for this photo" and
+     * "show the photo again". The file is named after the code, and a code's address can
+     * now change — `POST /v1/admin/codes/rebind` rewrites what an existing code opens, for
+     * the deployment that has moved to a new tunnel address (docs/tuping-design.md §17.27)
+     * — so the cached file is only trusted between registrations. After a registration the
+     * picture is fetched again, which is a few kilobytes and the only moment the answer can
+     * have changed; the code itself does not have to move for the address to be fixed, and
+     * that is exactly why trusting the file across a registration would keep a dead address
+     * on screen for the life of the install.
+     */
+    private suspend fun fetchQr(code: String, refresh: Boolean = false): File? {
         val file = File(qrDir, "$code.png")
-        if (file.isFile && file.length() > 0) return file
+        if (!refresh && file.isFile && file.length() > 0) return file
         val built = client() ?: return null
         return built.qrPng(code).fold(
             onSuccess = { bytes ->

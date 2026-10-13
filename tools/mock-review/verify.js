@@ -1754,9 +1754,47 @@ if (dumpFlag >= 0) {
   const malformed = await json('GET', '/v1/photos/abc');
   expect(malformed.status === 404, 'a malformed code (too short) is 404 as well', `status ${malformed.status}`);
 
+  // ---- 20. by-local: the read that lets the album end ask before uploading ---
+  //
+  // §17.28: a television shows a photo's code and its comments without uploading anything,
+  // and the question it asks is this one. Two properties matter and both are asserted: the
+  // answer is the identity *this device* registered, and a miss creates nothing — a lookup
+  // that quietly made a row would undo the whole point of the change.
+  console.log('\n[20] /v1/photos/by-local answers what this device registered, and creates nothing');
+  const byLocalOptions = { headers: { 'X-Device-Id': device.id, 'X-Device-Token': device.token } };
+  const photosBefore = IS_MOCK ? (await json('GET', '/__control/stats')).json.photos : null;
+
+  const byLocal = await json('GET', `/v1/photos/by-local?source=fnos&localId=${encodeURIComponent(`${MARK}-A`)}`, byLocalOptions);
+  expect(byLocal.status === 200 && byLocal.json && byLocal.json.imageId === photoA.imageId,
+    'the photo this device registered comes back with the same imageId',
+    `status ${byLocal.status} ${JSON.stringify(byLocal.json)}`);
+  expect(byLocal.json.code === photoA.code,
+    'and with the same code, so the picture behind the QR URL is the one on the wall');
+  expect(typeof byLocal.json.qrUrl === 'string' && byLocal.json.qrUrl.includes(`/v1/qr/${photoA.code}.png`),
+    'and with a qrUrl pointing at that code');
+
+  const neverOpened = await json('GET', `/v1/photos/by-local?source=fnos&localId=${MARK}-never-opened`, byLocalOptions);
+  expect(neverOpened.status === 404 && errorCode(neverOpened.json) === 'not_found',
+    'a localId this device never registered is 404 not_found — the answer most of a library gives',
+    `status ${neverOpened.status} ${JSON.stringify(neverOpened.json)}`);
+  const otherSource = await json('GET', `/v1/photos/by-local?source=fnos-album&localId=${encodeURIComponent(`${MARK}-A`)}`, byLocalOptions);
+  expect(otherSource.status === 404,
+    'and the source is part of the key: the same localId under another source is not this photo',
+    `status ${otherSource.status}`);
+  const noToken = await json('GET', `/v1/photos/by-local?source=fnos&localId=${encodeURIComponent(`${MARK}-A`)}`);
+  expect(noToken.status === 401, 'the question needs a device token at all', `status ${noToken.status}`);
+  const halfKey = await json('GET', '/v1/photos/by-local?source=fnos', byLocalOptions);
+  expect(halfKey.status === 400, 'a source without a localId is 400, not a 404', `status ${halfKey.status}`);
+
+  if (IS_MOCK) {
+    const photosAfter = (await json('GET', '/__control/stats')).json.photos;
+    expect(photosAfter === photosBefore,
+      `and none of those questions created a photo (${photosBefore} -> ${photosAfter})`);
+  }
+
   // ---- mock-only state -------------------------------------------------
   if (IS_MOCK) {
-    console.log('\n[20] the mock\'s own counters, for the record');
+    console.log('\n[21] the mock\'s own counters, for the record');
     const stats = await json('GET', '/__control/stats');
     expect(stats.status === 200 && stats.json && stats.json.requests > 0,
       `counters are readable (requests=${stats.json && stats.json.requests}, comments=${stats.json && stats.json.comments}, photos=${stats.json && stats.json.photos}, signBad=${stats.json && stats.json.signBad})`);

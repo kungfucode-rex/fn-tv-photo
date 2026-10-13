@@ -167,6 +167,7 @@
     <string name="settings_cache">Clear image cache</string>
     <string name="settings_cache_cleared">Cache cleared</string>
     <string name="settings_cache_usage">%1$s of %2$s</string>
+    <string name="settings_cache_capped">Reduced to fit the free space on this device (ceiling %1$s)</string>
     <string name="settings_cache_measuring">Reading…</string>
     <string name="settings_last_crash">Last crash</string>
     <string name="settings_crash_none">None</string>
@@ -229,10 +230,7 @@
     <string name="settings_review_server_unset">Not set</string>
     <string name="settings_review_server_hint">The server that collects photo comments.</string>
     <string name="settings_review_status">Review connection</string>
-    <string name="settings_review_scope">Upload scope</string>
-    <string name="settings_review_scope_current">This album</string>
-    <string name="settings_review_scope_all">All albums</string>
-    <string name="settings_review_danmaku">Danmaku</string>
+    <string name="settings_review_danmaku_amount">Danmaku amount</string>
     <string name="settings_review_danmaku_off">Off</string>
     <string name="settings_review_danmaku_few">Few</string>
     <string name="settings_review_danmaku_many">Many</string>
@@ -248,11 +246,11 @@
     <string name="viewer_comments">Comments %1$d</string>
     <string name="viewer_qr_hint">Scan to comment</string>
 
-    <!-- The 图评 button in the viewer's corner, and the three rows its menu opens. -->
-    <string name="viewer_action_review">Comments</string>
-    <string name="viewer_review_qr">QR code</string>
-    <string name="viewer_review_danmaku">Danmaku</string>
-    <string name="viewer_review_danmaku_amount">Danmaku amount</string>
+    <!-- The 扫码评论 button in the viewer's corner. The label is the *intent* rather than the
+         feature's name: somebody standing in front of a photo wants guests to comment on it,
+         and "photo review" is what this repository calls the machinery. -->
+    <string name="viewer_action_scan">Scan to comment</string>
+    <string name="viewer_scan_opened">Comments are on — guests can scan this code</string>
     <string name="settings_review_slideshow_on">Photo review</string>
 
     <!-- The two words a switch shows. Not Yes/No: these rows turn a *layer* on and off

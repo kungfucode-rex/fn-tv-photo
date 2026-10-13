@@ -145,3 +145,71 @@
     - **一处按实测改的设计**：`不指定` 本来在列表**最后一行**，实测要走 8 次 ↓ 才够得到，而在真库（这个账号能看到 7 个相册）上下还会从末尾绕回开头、一不小心就把它换成别的相册（我第一次就误选了 `表妹的毕业照`）。现在它固定在列表**最上方**，也是光标打开时落点，于是"关掉屏保相册"永远是一下 OK。
     - 离开设备的那一半：`ScreenSaverTest` 5 条，钉住 id 的两种写法（NAS 给数字、偏好存字符串、空与空白都算"没指定"、不是数字的值不匹配任何相册）以及 **5 分钟这个值本身**（5 分钟是产物决定，读常量的测试永远绿，所以这里断言字面值）。`testDebugUnitTest` 全绿。
     - **排序态的按键（1.5.6 修）**：报告两条 —— "选了 排序 之后按 OK 又往下移了一格"，以及"排序态按 OK 没反应、退不出来"。根因是同一个：`Reordering` 分支里**任何非 ↑ 的 KeyDown 都被当成"向下"**，而 OK 只在 Actions 模式里被处理，进了排序态就再没人管它。现在只有 ↑/↓ 会移动（且只在"新按下"时，auto-repeat 忽略），OK 确认并退出，并且**确认只在"这次按下发生在进入排序态之后"时才成立** —— 否则结束"选择 排序"那一下松手会把刚进入的排序态立刻确认掉。提示行同步改成 `…排序时 ↑↓ 挪位置，OK 或 Back 确认。`（1.5.5 的模型层修复由 `UploadPageModelTest` 覆盖：长按后 `focus == null`、左右键选一个、未选中时 OK 是 no-op。）
+
+27. **缓存上限跟着可用空间走、注册跟着显示开关走、短码能重绑地址** —— 三项都来自同一个晚上的三个问题（两天 50 G 流量、换了穿透地址后二维码还开老 IP、扫码前照片就进了库），设计取舍写在 [`tuping-design.md`](tuping-design.md) 的 §17.27。
+
+    **① 流量是"每一轮都在重下"的形状，而代码侧没有可修的缓存 bug。** 8 秒间隔、217 张 = 28.9 分钟一轮，两天约 **100 轮/台**；一台 200 MB 的相册就是 **20 GB/台**，三台 **60 GB** —— 和报上来的 50 G 同一个量级，说明几乎一次都没命中。反编译 Coil 3.5.0 排除了两类嫌疑：磁盘缓存 key 就是 URL 本身（`NetworkFetcher.getDiskCacheKey()` = `options.diskCacheKey ?: url`，**不含尺寸**，所以预取的 1×1 和查看器的全屏共用同一条目），`DefaultCacheStrategy.read` 也无条件放行、不按 `max-age` 判过期。于是问题落在预算上，改法是 `imageCacheBudgetBytes`：`ImageCacheSizeTest` 6 条钉住它 —— 30 GB 可用给满 5 GB、2 GB 可用给 512 MB、1 GB 给 256 MB、**20 GB 恰好是上限接管的边界**（`20 GiB` 给 5 GiB，少 4 字节就少 1 字节）、剩下的给地板 32 MB、读不出可用空间时取地板而**不是**上限，外加一条扫过 0–40 GB 的不变式：永远不超过上限、不低于地板、不超过可用空间的四分之一。
+
+    **② 短码上的地址只在铸码时写一次，所以"搬家"要有自己的入口。** 服务端 `codes_rebind_test.go` 8 个（4 个子测）全过：重绑后**短码不变**而 `X-Page-Url` 换成新地址；清空后交还给钉住的 `TUPING_BASE_URL`，`Cache-Control` 重新变成 `immutable`；重绑前后 `GET /v1/comments?imageId=…` 仍然取出那条评论、`/c/<短码>` 仍然 **200**；`updated/total` 报 1/1、同一份重绑跑第二遍报 **0/2**；`not a url`、`照片服务器`、`ftp://…`、`http://user:secret@…`、超长地址全部 **400 且一个短码都没动**（被拒之后再读 `X-Page-Url` 仍是老地址）；私网地址成功但带 `warning`；地址写在 JSON／表单／`?baseUrl=` 三种写法都能用（含 `curl -d` 把 JSON 当表单发的那种）；不带令牌 **401**，实例没设 `TUPING_ADMIN_TOKEN` 时 **404**。
+
+    **③ 注册的门现在要看显示开关。** `ReviewGateTest` 8 条钉住规则本身：两个开关都关 → 不注册；屏保里只开二维码 → 不注册；屏保开着弹幕 → 注册；弹幕档次是 `off` → 不注册；模式 `关`、地址为空、视频 → 不注册；**手动打开的照片在 仅幻灯片 模式下仍然合格**（1.4.x 修过的"开关看起来没用"，不能退回去）。
+
+    **④ 幻灯片那一行的「图评」开关，以前什么都不控制**（同一晚追问后补的）。`slideshowEnabled` 被画出来、能翻、写进偏好，而 `slideshowRegistersReview()` 全项目没有调用点 —— 一行"图评 关"的幻灯片照样注册。现在它是三层规则里的一层（模式 → 放映自己的开关 → 图评菜单的两个开关），并且**只管放映**：手动打开的照片仍然合格。`ReviewGateTest` 从 8 条加到 **11 条**（新增"放映中 图评 关 → 不注册"、"屏保跟着放映那条开关"、"放映开关不碰手动打开的照片"）。顺带把那个 `LaunchedEffect` 的 key 补全成"决定这个答案的每一个事实"，否则开关只在下一张照片上生效 —— 切开关的当帧 `openPhoto` 就会重跑，实测两条日志都拿到了。
+
+    **设备上量到的那一对**（模拟器，图评指向 `tools/mock-review`，幻灯片 8 秒、正在放映、图评菜单里 二维码 开 / 弹幕 开）：
+
+    - **图评 关**：按 OK 的当帧日志是 `图评: not registering photo 1003 — the 幻灯片 row's 图评 switch is 关, so this show carries none of it (wanted=false, video=false, mode=slideshow, qr=true, danmaku=true, level=few, screensaver=false, slideshow=true)` —— 注意两个显示开关都是 `true`，所以这条拒绝**只**来自放映那条开关。随后让放映自己走了 **20 秒以上（三张）**，`tools/mock-review` 的输出里**一行新 `[photos]` 都没有**。
+    - **图评 开**：同一屏上按回 OK，二维码立刻回到屏幕上（图评菜单两个开关一直是开着的，所以这是"注册恢复"的直接后果）；在那之前同一场放映的 `[photos] … matched=new` 记了一长串。
+
+
+    **设备上的读数**（Android TV 模拟器 + `tools/mock-nas` + `tools/mock-review`，应用 `10.0.2.2:5667` / 图评 `10.0.2.2:8080`）：
+
+    - **缓存预算真的按剩余空间算了**：`AppContainer: image cache budget 934 MiB (volume has 3739 MiB free)`。同一时刻 `adb shell df -h /data` 是 `5.8G 2.0G 3.6G 36%` —— 也就是说**旧的固定 5 GB 比这台设备整个可用空间（3.6 GB）还大**，这一行就是那个 bug 的形状。
+    - **设置页那一行把生效上限和原因都说了**：`清除图片缓存` 读到 `已用 49.2MB / 934.8MB`，下面一行 `按设备剩余空间调低（上限 5.0GB）`（截图 `artifacts/screenshots/cache-27-capped.jpg`）。934.8 MB 与日志里那句 934 MiB 是同一次决定的两种说法。
+    - **门是真的关上了，而且关在服务端**：打开任意一张照片、把 图评 菜单里的 `二维码` 和 `弹幕` 都切成 `关`（屏幕上那张码随之消失），再打开一张照片，应用日志是 `图评: not registering photo 1008 — the 图评 menu has the QR code and the danmaku both switched off (wanted=false, video=false, mode=slideshow, qr=false, danmaku=false, level=few, screensaver=false)`；同一时间里 `tools/mock-review` 的日志里**没有**任何新的 `[photos]` 行，只有那条不带 imageId 的设备探针（`[400] GET /v1/comments: no imageId`，它是 `deviceAccepted` 的固定形状）。
+    - **开关打开时它照常入库，所以这不是"一刀关掉"**：上面那一步之前，两个开关都是 `开`，打开一张照片并在幻灯片里走过几张，mock 上记到 **8 条 `[photos] … matched=new`** 加 1 条 `matched=reused`，屏幕上那张码也在。
+    - **没在设备上走的**：屏保里"只开二维码"和"只开弹幕"那两种组合（规则由 `ReviewGateTest` 钉住，线路上没跑）；以及短码重绑的端到端（服务端 8 个测试全过、应用侧重取 PNG 的那一行是 `fetchQr(refresh = true)`，但它要一台已经注册过的电视才能看出效果）。
+
+28. **照片要有人按一下才进服务端** —— §17.28 的改动，取值方式写在 [`tuping-design.md`](tuping-design.md) 里。**没有按过的照片，服务端上一行都没有**，这是这一条要证明的全部。
+
+    **服务端**：`photos_local_test.go` 7 个全过 —— 登记过的照片查得回来（同一 imageId／短码／评论数，回包还带 `thumbUrl`/`qrUrl`）、**查不到时什么都不建**（`/healthz` 的 `thumbBytes` 前后不动，同一个问题问两次都还是 404）、按设备隔离（另一台电视查同一个 `localId` 是 404）、没有设备令牌 401（三种缺法）、`source`/`localId` 缺一即 400、合并之后两个 `localId` 都答同一个根且评论数带上、`/v1/photos/by-local` 没有被 `/v1/photos/{code}` 的通配路由吞掉。
+
+    **应用里离开设备的那一半**：`ReviewGateTest` 10 条（手动打开＝LOOKUP 而**不是** REGISTER；放映开关关＝LOOKUP、开＝REGISTER；屏保跟着放映那条开关；屏保没东西可画时**连问都不问**；查看器弹幕关了仍然会问，因为码可能已经开着；模式 `关`／地址为空／视频是外层门；手动打开的照片在 仅幻灯片 下仍然合格；弹幕"开关 × 档次"）与 `ReviewLookupTest` 3 条（认得的照片解析成身份并且请求打的是 `/v1/photos/by-local?source=…&localId=…`；**404 是成功、答案为 null**；401 仍然是失败并带服务器那句话）。`testDebugUnitTest` **313 条全绿**（38 个套件），`& .\tools\tuping.ps1 -Tasks test` 全绿。
+
+    **设备上的读数**（Android TV 模拟器，`tools/mock-nas` + `tools/mock-review`，图评 `10.0.2.2:8080`；服务端的计数一律用 mock 的 `/__control/stats` 读 —— 翻日志看不出"没发生的事"，计数可以）：
+
+    - **翻看照片不上传**：冷启动后进 `我的照片 → 10月 → 第一张`，应用日志是 `图评: 1002 is not on the server — nobody has opened 图评 on it. Press 图评 to put it there; nothing was uploaded.`；同一时刻 mock 的计数是 **`photos:0 codes:0`**（只有一条 `[devices]` 和设备探针那条 `[400] GET /v1/comments: no imageId`）。屏幕上那张照片右下角**什么都没有**（截图 `artifacts/screenshots/t1-viewer.jpg`）。
+    - **正在放映、开关关着，也不上传**：同一台电视上让幻灯片自己放了 22 秒（8 秒一张，走过三张），日志逐张写"not on the server…nothing was uploaded"，而 `photos` **从头到尾是 0**（`requests` 18 → 22，说明它确实在逐张查询）。
+    - **按一下才进库**：按 ↑ 打开信息条 → ← 到 图评 → OK 打开菜单（新的一行读作 **这张照片 关**，截图 `t2-row.jpg`）→ 再按 OK。mock 立刻记到 `[photos] … matched=new`，`/__control/stats` 变成 **`photos:1 codes:1`**，屏幕上那一行变成 **这张照片 开**（截图 `t2-armed.jpg`）。
+    - **重开一次认得出、不再上传**（这一条上一轮没走完）：`am force-stop` 之后重新启动（进程内的身份缓存因此清空），再走到同一张照片 —— 应用日志里**没有**任何"not on the server"，说明 `by-local` 命中了；`photos` 前后都是 **1**（`requests` 19 → 26，多出来的就是那次查询）；屏幕上二维码回来了（截图 `t5-lookup-hit.jpg`）。这正是"已经开过的照片以后再看会自动认出来并直接显示二维码，不会再上传一次"。
+    - **有了评论就飘**（上一轮没能测的一半）：对着那张照片的短码 `POST /v1/comments`（mock 的实时推送把它发给已经订阅的那台电视），**2 秒后**这条弹幕就飘在照片上了（截图 `t6-danmaku4.jpg`：`这张真好看` 与二维码同屏，`photos` 仍然是 1）。顺带记一个**测量工具的坑**：第一次用 `Invoke-WebRequest -Body '<json 字符串>'` 发出去的是 Latin-1，电视上飘的是 `?????` —— 换成 `[Text.Encoding]::UTF8.GetBytes($json)` 才是中文；电视那一侧从头到尾都是对的。
+    - **放映开关那两半，同一台电视、同一段空闲时间、只差这一个开关**：定时器 15 秒后屏保自己放起来（屏保也是一场放映）。开关**开**时 45 秒里 `photos 1 → 9`、`codes 1 → 9`（每张一个短码）；开关**关**时同样 45 秒里 `photos 10 → 10`、`codes 10 → 10`，而 `requests` 52 → 82 / 87 → 106（两次都确实在逐张查询）。两个读数都是用 `run-as … sed -i` 直接改那个偏好再重启拿到的 —— 遥控器上按那个开关的按键有一半会被模拟器吞掉（见下），所以最后这一步没有靠按键。
+    - **屏保里不画码**：长时间不动时屏幕上是照片 + 飘着的弹幕、**没有二维码**；按任意键回到查看器，码就回来了（截图 `t7-now.jpg` 无码、`t7-key.jpg` 有码）。同一段空闲里 `photos` 没有增加。
+    - **这一轮改了 `tools/mock-review`**：它之前不认 `/v1/photos/by-local`，于是应用每次查询都拿到 404、被读成"这张照片不在服务端"—— 看起来和真的没登记过一模一样。加了实现（和 `GET /v1/photos/{code}` 共用同一个响应构造函数，免得两边漂移）之后，上面那条"认得出"才测得出来。**这就是 mock 是契约的一部分的意思**：它不认识的新端点不会报错，只会安静地给出另一个正确答案。
+    - **没在设备上走的**：换一台电视看同一张照片（`device_local` 按设备隔离，服务端有 7 条测试钉住）；以及"照片登记之后又被删掉"那条恢复路径。
+
+29. **一个按钮：扫码评论** —— §17.29 的改动。**从详情页按一下，信息条收起、二维码出现、弹幕开着**，这是这一条要证明的全部；另外两件顺带的事：按钮在不在（视频上没有）、以及弹幕那个开关搬进设置之后还读得出值。
+
+    **规矩上的两半**：`testDebugUnitTest` **313 条全绿**（38 个套件），其中 `ReviewGateTest` 10 条 —— `showDanmaku` 那个参数删掉之后，"屏保没东西可画"不再需要两种关法，`danmakuDrawn` 只看档次。`& .\tools\tuping.ps1 -Tasks test` 全绿（服务端这一轮一个字没改）。`assembleDebug` 通过。
+
+    **设备上的读数**（Android TV 模拟器 + `tools/mock-nas` + `tools/mock-review`，图评 `10.0.2.2:8080`）：
+
+    - **角上那排字换了**：打开信息条，辅助功能树里读到的按钮是 `原图 | 扫码评论 | 幻灯片`（截图 `artifacts/screenshots/n4-band.jpg`）。
+    - **按一下就到终态**：光标在 扫码评论 上按 OK —— 信息条**自己收起**，二维码出现在右下角（截图 `artifacts/screenshots/n7-scan-ok.jpg`，`扫码加评论` 那行字也在），而按下之前 mock 的计数是 `photos=0 codes=0`、按下之后是 **`photos=1 codes=1`**。按下之前同一张照片的日志正是 `图评: 1002 is not on the server — nobody has opened 图评 on it. Press 扫码评论 to put it there; nothing was uploaded.`（这句话里的按钮名是这一轮改的）。
+    - **弹幕也开了，而且是改的偏好**：测试前把 `danmaku_level` 写死成 `off`（`run-as cat` 读到的就是 `off`），按下之后同一个文件读到 **`few`**；随后往那个短码 `POST /v1/comments` 发一条 `这张真好看`，**2 秒后**它就在照片上飘（截图 `artifacts/screenshots/n8-danmaku.jpg`）—— 中间没有再动任何开关。
+    - **设置里那一行读得出值**：`设置 → 图评设置` 的面板是 `图评 仅幻灯片 / 图评服务器 10.0.2.2:8080 / 弹幕数量 少 / 有新评论时多停一会儿 是 / 图评连接状态 已连接`（截图 `artifacts/screenshots/n11-settings-review.jpg`）—— `少` 正是上面那一按写进去的值，而 `上传范围` 那一行已经不在了。
+    - **"没有评论就不显示"那一半仍然成立**：这一轮 mock 里这条评论出现之前，同一张照片上只有码、什么都没有飘。
+    - **测量过程本身的两个坑**（和上一条一样记下来）：模拟器大约三次里有一次吞掉 `input keyevent`，所以这一轮凡是"按下之后应该发生什么"都写成了**按结果重试的循环**（最多 5 次，判据是 mock 的 `photos` 计数），而不是"按一次然后相信它"；中途我为了找 `设置` 多按了一下 DOWN，落到了 **退出登录** 上，把会话清掉了 —— 后来发现辅助功能树里每个节点都带 `bounds`，**登录按钮和侧栏条目是真正可点的**，用 `input tap` 按坐标点回去比猜 D-pad 稳得多（查看器角上那些按钮不行：它们 `clickable="false"`，只由根节点处理按键）。
+
+30. **没有配置图评服务器，就不画 扫码评论 和 图评 开关** —— §17.30。判据是一个事实：`reviewDecision(isVideo = false, screenSaver = false, slideshow = false) != HIDDEN`，角上的按钮和幻灯片那一行的开关都看它。`testDebugUnitTest` 313 条全绿（这一条没有新增单测：它是纯界面规则，判断本身早就被 `ReviewGateTest` 的 10 条盖住）。
+
+    **同一个模拟器、同一张照片、只差一个设置**（`tools/mock-nas` 照常，图评地址用 `run-as … cp` 直接写进偏好再重启，比在设置页里删字稳）：
+
+    | | 信息条（辅助功能树里读到的按钮） | 幻灯片那一行 |
+    | --- | --- | --- |
+    | **没有 `server_url`** | `原图 \| 幻灯片` | `播放 \| 间隔 8秒 \| 顺序 顺序 \| 音乐 未选择` |
+    | **有 `server_url`**（`10.0.2.2:8080`） | `原图 \| 扫码评论 \| 幻灯片` | `播放 \| 间隔 8秒 \| 顺序 顺序 \| 音乐 未选择 \| 图评 关` |
+
+    两张截图：`artifacts/screenshots/m1-noserver-band.jpg`（没有那个按钮）、`m3-server-band.jpg`（有）；模拟器上放视频时角上也读不到 `扫码评论`（`VID_20261005_08.mp4`，`3 / 15`），而那一行的 `图评` 开关**照样在** —— `isVideo = false` 那一处就是这么来的。
+
+    **没在设备上量的**：把光标从 4 格那版走到头（没有服务器时 left/right 在四格之间绕回）—— 走的是和五格版同一个 `settingRows` 取模，而五格版量到了：从 播放 按右键四下，光标落在 **图评 关** 上（截图 `artifacts/screenshots/m5-focus-review-switch.jpg`）。

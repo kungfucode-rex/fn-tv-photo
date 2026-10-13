@@ -180,6 +180,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/devices", s.handleDeviceRegister)
 	mux.HandleFunc("POST /v1/photos", s.handlePhotoRegister)
 	mux.HandleFunc("GET /v1/photos/{code}", s.handlePhotoGet)
+	mux.HandleFunc("GET /v1/photos/by-local", s.handlePhotoByLocal)
 	mux.HandleFunc("DELETE /v1/photos/{id}", s.handlePhotoDelete)
 	mux.HandleFunc("GET /v1/qr/{code}", s.handleQR)
 	mux.HandleFunc("GET /v1/comments", s.handleComments)
@@ -189,6 +190,10 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /v1/admin/comments", s.handleAdminList)
 	mux.HandleFunc("POST /v1/admin/comments/{id}", s.handleAdminDecide)
+
+	// The one admin operation that is about the deployment rather than a comment: the
+	// address recorded on every short code, for a server that has moved (§17.27).
+	mux.HandleFunc("POST /v1/admin/codes/rebind", s.handleAdminRebindCodes)
 
 	// The admin door on the web page (§17.15). Login and logout are POST-only, so a
 	// stray <img> or a browser prefetch cannot sign anyone in or out.

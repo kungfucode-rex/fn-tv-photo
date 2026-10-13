@@ -656,6 +656,85 @@ func (s *Store) ensureCode(ctx context.Context, imageID string, scope Scope, sco
 	return "", "", errors.New("store: could not allocate a unique code")
 }
 
+// DevicePhoto answers the one question the album end asks before it decides to upload
+// anything: *has this device already registered this picture?*
+//
+// It is [recentDevicePhoto] with the two halves that make a registration a registration
+// taken out — no freshness window and no writes. The window exists to decide whether a
+// thumbnail has to be sent again (§6.2), which is a question about bytes; this one is about
+// identity, and a picture this device registered a year ago is exactly as known as one it
+// registered a minute ago. Nothing is touched on the way through: no `updated_at`, no
+// `last_seen_at`, no thumbnail. A lookup that wrote would make "how recently was this
+// really seen" depend on how often somebody *looked* at it.
+//
+// The code is read back too, and only if both halves exist: a mapping whose code was never
+// minted (a registration that died between the two writes) is answered as unknown, which
+// sends the album end down the path that mints one. The image id is not returned — the code
+// is what the caller acts on, and it is the code that resolves to the root of a merge group.
+func (s *Store) DevicePhoto(ctx context.Context, deviceID, source, localID string) (code string, ok bool, err error) {
+	if deviceID == "" || source == "" || localID == "" {
+		return "", false, nil
+	}
+	var imageID string
+	err = s.db.QueryRowContext(ctx,
+		`SELECT image_id FROM device_local WHERE device_id=? AND source=? AND local_id=?`,
+		deviceID, source, localID).Scan(&imageID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("store: device photo: %w", err)
+	}
+
+	err = s.db.QueryRowContext(ctx,
+		`SELECT code FROM codes WHERE image_id=? AND scope_type=? AND COALESCE(scope_id,'')='' LIMIT 1`,
+		imageID, int(ScopeImage)).Scan(&code)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("store: device photo code: %w", err)
+	}
+	return code, true, nil
+}
+
+// RebindCodes rewrites the address recorded on every short code, and reports how many rows
+// that changed out of how many exist.
+//
+// [baseURL] is the address every code should point at from now on, or "" to **clear** what
+// each code recorded — which hands every code back to the deployment's own answer: the
+// pinned TUPING_BASE_URL, or the address the caller reached the server on (the chain is in
+// `api.pageBase`).
+//
+// This is the operation `ensureCode` explicitly refuses to do on its own. A code keeps the
+// address it was minted with because a guest may be holding a printed or screenshotted
+// link, and silently re-pointing it because somebody registered the same photo from another
+// network would break the one thing a link has to be. But a deployment that has *moved* —
+// a new tunnel address, a new port forward, a domain at last — has codes that open a host
+// nobody can reach, and the alternative was handwritten SQL against a live database
+// (docs/tuping-design.md §17.27). The two are different acts and they are asked for
+// differently: one is a side effect of registering a photo, the other is an operator
+// saying "we have moved".
+//
+// Nothing else moves. Comments hang off `photos.id`, not off the code, so every thread
+// survives a rebind — and the code itself survives too, which is what keeps `/c/<code>`
+// links, the H5 page's own history entries and the television's cached identity valid.
+func (s *Store) RebindCodes(ctx context.Context, baseURL string) (updated, total int64, err error) {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM codes`).Scan(&total); err != nil {
+		return 0, 0, fmt.Errorf("store: count codes: %w", err)
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE codes SET base_url = ? WHERE base_url <> ?`, baseURL, baseURL)
+	if err != nil {
+		return 0, 0, fmt.Errorf("store: rebind codes: %w", err)
+	}
+	updated, err = res.RowsAffected()
+	if err != nil {
+		return 0, 0, fmt.Errorf("store: rebind codes: %w", err)
+	}
+	return updated, total, nil
+}
+
 // CodeTarget is what a short code resolves to.
 type CodeTarget struct {
 	Code      string

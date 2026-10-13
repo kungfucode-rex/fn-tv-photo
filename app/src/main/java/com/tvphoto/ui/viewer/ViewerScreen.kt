@@ -75,9 +75,11 @@ import com.tvphoto.data.review.DanmakuLevel
 import com.tvphoto.data.review.PhotoIdentity
 import com.tvphoto.data.review.ReviewCandidate
 import com.tvphoto.data.review.ReviewComment
+import com.tvphoto.data.review.ReviewDecision
 import com.tvphoto.data.review.ReviewStatus
 import com.tvphoto.data.review.ReviewView
 import com.tvphoto.data.review.StayExtension
+import com.tvphoto.data.review.danmakuDrawn
 import com.tvphoto.ui.music.MusicRow
 import com.tvphoto.ui.music.firstTickedRow
 import com.tvphoto.ui.music.musicRows
@@ -266,17 +268,16 @@ fun ViewerScreen(
     // and falling back to the top of the list would jump the show back to the newest.
     var positionHint by remember { mutableIntStateOf(startIndex) }
 
-    // The corner opens a row above itself: 幻灯片 opens the slideshow's settings, 图评 opens
-    // its display switches. `mainFocus` says which button the D-pad is on; `settingFocus`
-    // is the control within whichever row is open.
+    // The corner opens one row above itself: 幻灯片 opens the slideshow's settings. `mainFocus`
+    // says which button the D-pad is on; `settingFocus` is the control within that row.
     //
-    // One nullable `cornerMenu` rather than a flag per row: the two rows are mutually
-    // exclusive, and two booleans would allow a state — both open — that the drawing has no
-    // answer for.
-    var cornerMenu by remember { mutableStateOf<CornerMenu?>(null) }
+    // A flag rather than the nullable menu this used to be: 图评's own row is gone (§17.29) —
+    // its per-photo act is now the **扫码评论** button in the same corner, and its two display
+    // preferences moved to Settings — so exactly one row can be open, and "is it open" is all
+    // the drawing needs to know.
+    var slideshowRowOpen by remember { mutableStateOf(false) }
     var mainFocus by remember { mutableIntStateOf(MAIN_SLIDESHOW) }
     var settingFocus by remember { mutableIntStateOf(SETTING_PLAY) }
-    var reviewFocus by remember { mutableIntStateOf(REVIEW_ROW_QR) }
 
     /**
      * The photo the user asked to see at full size, if any.
@@ -365,30 +366,68 @@ fun ViewerScreen(
     //    row reads 已连接 and this button greys out — and with it the only way to reach
     //    图评's own switches. Reported as "the switches are all grey and I cannot open them".
     //
-    // The switches decide what is drawn; they are worth reaching even while the server is
-    // quiet, and the status row is what explains why nothing is drawn. Opening the menu says
-    // that reason out loud, since a television has no console.
-    //
-    // The status is refreshed on entering the viewer, because nothing else would have asked
-    // since the settings screen was last opened: a server switched off in between would
-    // otherwise leave the button lit and its menu openable on a stale 已连接.
+    /**
+     * What 图评 should do about the photo on screen, as one value.
+     *
+     * Computed here rather than only inside the repository, for two reasons: it decides
+     * whether the corner's 扫码评论 can do anything at all (see [reviewDisabled]), and it is
+     * the key of the effect below, so a switch that changes the answer re-answers for the
+     * photo *on screen* instead of waiting for the next one. Every fact it is made of —
+     * whether a show is running, the show's own 图评 switch, the danmaku amount — is read from
+     * collected state, so a change to any of them recomposes this expression (§17.28).
+     */
+    val reviewDecisionForPhoto = viewModel.reviewDecisionFor(
+        isVideo = current.isVideo,
+        screenSaver = screenSaver,
+        slideshow = slideshowRunning,
+    )
+
+    // The button says what it does and is absent when nothing could come of it: no server
+    // address, or 图评 switched off altogether — both of which are exactly the HIDDEN
+    // decision, so there is no second copy of that judgement here. A *failed* connection
+    // deliberately leaves it there: pressing it is how somebody retries, and the press says
+    // the reason out loud (see [scanToComment]), which is the one thing a television can do
+    // instead of printing to a console.
     val reviewStatus by viewModel.reviewStatus.collectAsStateWithLifecycle()
-    val reviewDisabled = reviewStatus is ReviewStatus.NoServer
-    // Not asked for while the screensaver is playing: the status is only ever drawn on the
-    // 图评 row, and a screensaver cannot open that row — so the request would be a call to
-    // somebody's server, in the middle of the night, for a screen that draws nothing of it.
+    val reviewDisabled = reviewDecisionForPhoto == ReviewDecision.HIDDEN
+
+    /**
+     * Whether 图评 is part of this screen *at all*: with no server address, or the mode at 关,
+     * there is nothing to open 图评 on and nothing for a show to carry, so the corner's
+     * 扫码评论 and the slideshow row's 图评 switch are not drawn rather than sitting there dead.
+     *
+     * Not the same question as [reviewDisabled], which is about *this* photo: that one answers
+     * HIDDEN for a video too. The slideshow's switch belongs to the show rather than to the
+     * picture, so it has to stay reachable while a video is on screen — hence `isVideo = false`.
+     *
+     * Asked as the same `reviewDecision` the layer itself obeys, rather than by reading
+     * `serverUrl` here: one judgement, one place, and "no server" and "mode 关" cannot drift
+     * apart between the button and the switch. Settings is where the address is typed, so
+     * Settings is where both controls come back from.
+     */
+    val reviewControlsVisible = viewModel.reviewDecisionFor(
+        isVideo = false,
+        screenSaver = false,
+        slideshow = false,
+    ) != ReviewDecision.HIDDEN
+    // Not asked for while the screensaver is playing: the status is only ever read by the
+    // press that opens 图评, and a screensaver has no buttons at all — so the request would be
+    // a call to somebody's server, in the middle of the night, for a screen that draws none
+    // of it.
     LaunchedEffect(Unit) { if (!screenSaver) viewModel.refreshReviewStatus() }
 
-    // Where the D-pad is in the corner. None of them while the band is closed or a row has
-    // the D-pad.
+    // Where the D-pad is in the corner. None of them while the band is closed or the
+    // slideshow's row has the D-pad.
     //
     // `available` rather than the original behaviour of only 原图: with three buttons, a
     // narrow "canLoadOriginal" test left 图评 unreachable whenever an original was on
     // screen, which is most of the time in the mode that shows the code.
-    val available = cornerButtons(canLoadOriginal, reviewDisabled)
-    val onReviewButton = showInfo && cornerMenu == null && mainFocus == MAIN_REVIEW
-    val onSlideshowButton = showInfo && cornerMenu == null && mainFocus == MAIN_SLIDESHOW
-    val onOriginalButton = showInfo && cornerMenu == null && canLoadOriginal &&
+    val canScan = !current.isVideo
+    val available = cornerButtons(canLoadOriginal, canScan, reviewDisabled)
+    val onScanButton = showInfo && !slideshowRowOpen && canScan && !reviewDisabled &&
+        mainFocus == MAIN_SCAN
+    val onSlideshowButton = showInfo && !slideshowRowOpen && mainFocus == MAIN_SLIDESHOW
+    val onOriginalButton = showInfo && !slideshowRowOpen && canLoadOriginal &&
         mainFocus == MAIN_ORIGINAL
 
     /**
@@ -399,7 +438,7 @@ fun ViewerScreen(
      * is what left/right move in. Paging with the band open is a press of down first, which
      * closes it.
      */
-    val cornerRow = showInfo && cornerMenu == null && available.size > 1
+    val cornerRow = showInfo && !slideshowRowOpen && available.size > 1
 
     /**
      * True while the picture on screen has not been decoded yet, which is the viewer
@@ -848,10 +887,9 @@ fun ViewerScreen(
     val danmakuLevel by viewModel.danmakuLevel.collectAsStateWithLifecycle()
     val extendStayOnComment by viewModel.extendStayOnComment.collectAsStateWithLifecycle()
 
-    // The two switches the 图评 button owns. Read here rather than passed in from the menu,
-    // because they decide whether the two drawers below draw anything at all.
-    val reviewShowQr by viewModel.reviewShowQr.collectAsStateWithLifecycle()
-    val reviewShowDanmaku by viewModel.reviewShowDanmaku.collectAsStateWithLifecycle()
+    // The one switch left in this screen's 图评 world: the slideshow's own 图评. The danmaku's
+    // amount — including `off`, which *is* "no danmaku" — lives in 设置 → 图评设置, because it
+    // is a preference rather than something about the photo in front of you (§17.29).
     val reviewSlideshowEnabled by viewModel.reviewSlideshowEnabled.collectAsStateWithLifecycle()
 
     // Which album the photo on screen came from, for the `source` field a registration
@@ -939,13 +977,15 @@ fun ViewerScreen(
         items.size,
         current.isVideo,
         slideshowShuffled,
-        cornerMenu,
+        // A row of settings on screen is the room's attention on something else, so the show
+        // waits rather than stepping out from under the person reading it.
+        slideshowRowOpen,
         slideshowResume,
         // A comment that arrived during this photo's stay restarts the wait, so "hold this
         // one until it has crossed" is measured from when the comment appeared.
         stayExtensionMs,
     ) {
-        if (slideshowRunning && items.size > 1 && cornerMenu == null) {
+        if (slideshowRunning && items.size > 1 && !slideshowRowOpen) {
             delay(slideshowSeconds * 1000L + stayExtensionMs)
             queueSlideshowStep()
         }
@@ -970,10 +1010,10 @@ fun ViewerScreen(
     // on a loop at 2am, because a photo album happens to be set as the screensaver, is a
     // failure mode that would get the whole feature switched off.
     val musicWanted = slideshowRunning && selectedMusic.isNotEmpty() && !screenSaver
-    LaunchedEffect(musicWanted, cornerMenu, current.isVideo, selectedMusic, onScreen) {
+    LaunchedEffect(musicWanted, slideshowRowOpen, current.isVideo, selectedMusic, onScreen) {
         when {
             !musicWanted -> viewModel.stopSlideshowMusic()
-            !onScreen || cornerMenu != null || current.isVideo -> viewModel.pauseSlideshowMusic()
+            !onScreen || slideshowRowOpen || current.isVideo -> viewModel.pauseSlideshowMusic()
             else -> viewModel.playSlideshowMusic()
         }
     }
@@ -981,14 +1021,12 @@ fun ViewerScreen(
     // Videos always start playing when they become the visible item.
     LaunchedEffect(currentIndex) { videoPlaying = true }
 
-    // Handing the photo over is what makes the layer follow the picture. Keyed on the id so
-    // a late registration does not restart it, and on the source and the video flag because
-    // those are the two things that decide what the layer is asked to do with it.
+    // Handing the photo over is what makes the layer follow the picture.
     //
-    // `slideshowRunning` used to be in this key list, back when the mode made eligibility
-    // depend on it. It is out now: the 图评 menu's switches govern the display, and a menu
-    // row that only takes effect once a slideshow is started is what "二维码 开 but nothing
-    // on screen" turned out to be.
+    // Keyed on the decision rather than on the settings behind it: the decision is the only
+    // thing the layer acts on, and a settings value that does not change it — the danmaku
+    // amount moving between two non-`off` values, say — has no business restarting the
+    // handover.
     //
     // The screensaver registers exactly like the viewer does, and that was a deliberate
     // reversal: 弹幕 is what a screensaver album is *for* on a shared wall. A photo nobody
@@ -997,16 +1035,27 @@ fun ViewerScreen(
     // anybody") and the result was a slideshow with the one thing this app adds removed.
     // What stays off in a screensaver is the QR code (nobody is there to scan it) and the
     // live socket (see below), not the comments.
-    LaunchedEffect(currentId, reviewSource, current.isVideo) {
-        viewModel.openReviewedPhoto(item = current, source = reviewSource)
+    LaunchedEffect(currentId, reviewSource, reviewDecisionForPhoto) {
+        viewModel.openReviewedPhoto(
+            item = current,
+            source = reviewSource,
+            decision = reviewDecisionForPhoto,
+            screenSaver = screenSaver,
+            slideshow = slideshowRunning,
+        )
     }
 
     // Pre-registering: the codes and comments for the next few photos are fetched before
     // anybody asks for them, so the danmaku of the photo after this one is already in hand
     // when the show reaches it — the difference between a screensaver that annotates itself
     // and one that shows every comment three seconds late.
-    LaunchedEffect(currentId, slideshowRunning) {
-        if (!slideshowRunning && !viewModel.isReviewOnForEveryPhoto) return@LaunchedEffect
+    //
+    // **Only a show that carries 图评 does this at all** (docs/tuping-design.md §17.28).
+    // Uploading the four photos behind the current one *is* registration, and registration
+    // is what a person asks for: outside a show whose own 图评 switch is on, this effect
+    // does nothing and the photos nobody opened stay off the server.
+    LaunchedEffect(currentId, slideshowRunning, reviewSlideshowEnabled, screenSaver) {
+        if (!slideshowRunning) return@LaunchedEffect
         val ahead = items.asSequence()
             .drop(currentIndex)
             .take(PRE_REGISTER_AHEAD)
@@ -1024,7 +1073,7 @@ fun ViewerScreen(
                 sha256Original = null,
             )
         }
-        viewModel.preRegisterReviewedPhotos(candidates, reviewSource)
+        viewModel.preRegisterReviewedPhotos(candidates, reviewSource, slideshow = slideshowRunning)
     }
 
     // The socket opens when the photo settles and closes when it changes. Following every
@@ -1061,36 +1110,21 @@ fun ViewerScreen(
     val orderSequentialLabel = stringResource(R.string.viewer_order_sequential)
     val orderShuffleLabel = stringResource(R.string.viewer_order_shuffle)
 
-    // The 图评 row's labels. The two switches reuse the settings screen's 是/否 because it
-    // is the same question a person is answering, and the amount reuses the three words it
-    // already has — one vocabulary for one setting, wherever it is read from.
-    val reviewQrLabel = stringResource(R.string.viewer_review_qr)
-    val reviewDanmakuLabel = stringResource(R.string.viewer_review_danmaku)
-    val reviewAmountLabel = stringResource(R.string.viewer_review_danmaku_amount)
+    // The corner's words. 扫码评论 replaced 图评's own row in §17.29: the button is the act
+    // that puts *this* photo on the server, and the danmaku's amount — including `off` — is a
+    // preference that lives in Settings, so there is nothing left here that is a value to
+    // step.
+    val scanLabel = stringResource(R.string.viewer_action_scan)
+    val scanOpened = stringResource(R.string.viewer_scan_opened)
     val reviewSlideshowLabel = stringResource(R.string.settings_review_slideshow_on)
 
-    // 开/关 rather than 是/否: all three of these turn a layer on or off, and the value is
+    // 开/关 rather than 是/否: the slideshow's switch turns a layer on or off, and the value is
     // the only thing visible on the row.
     val switchOn = stringResource(R.string.switch_on)
     val switchOff = stringResource(R.string.switch_off)
 
     val reviewSlideshowOnLabel = "$reviewSlideshowLabel $switchOn"
     val reviewSlideshowOffLabel = "$reviewSlideshowLabel $switchOff"
-    val reviewQrOnLabel = "$reviewQrLabel $switchOn"
-    val reviewQrOffLabel = "$reviewQrLabel $switchOff"
-    val reviewDanmakuOnLabel = "$reviewDanmakuLabel $switchOn"
-    val reviewDanmakuOffLabel = "$reviewDanmakuLabel $switchOff"
-
-    // The three words the amount row cycles through, resolved here: `stepReviewRow` is a
-    // plain function and cannot call `stringResource` itself.
-    val danmakuOffLabel = stringResource(R.string.settings_review_danmaku_off)
-    val danmakuFewLabel = stringResource(R.string.settings_review_danmaku_few)
-    val danmakuManyLabel = stringResource(R.string.settings_review_danmaku_many)
-    fun danmakuLevelLabel(level: DanmakuLevel): String = when (level) {
-        DanmakuLevel.OFF -> danmakuOffLabel
-        DanmakuLevel.FEW -> danmakuFewLabel
-        DanmakuLevel.MANY -> danmakuManyLabel
-    }
 
     /** OK with the info hidden, and the settings row's play control, share this. */
     fun togglePlayback() {
@@ -1104,23 +1138,44 @@ fun ViewerScreen(
     }
 
     fun closeSettings() {
-        cornerMenu = null
+        slideshowRowOpen = false
         musicListOpen = false
         // Back to the corner button the band hands the D-pad to; see [cornerFocus].
         mainFocus = cornerFocus(canLoadOriginal)
         settingFocus = SETTING_PLAY
-        reviewFocus = REVIEW_ROW_QR
     }
 
-    /** Opens 图评's row of display switches above its button. */
-    fun openReviewMenu() {
-        cornerMenu = CornerMenu.REVIEW
-        reviewFocus = REVIEW_ROW_QR
-        // The switches can only decide what is drawn; they cannot make a server answer. The
-        // press that opens them is therefore the one place this screen can say why the layer
-        // is empty — and on a television there is no console to say it anywhere else
-        // (docs/tuping-design.md §9.4).
-        if (reviewStatus is ReviewStatus.Failed) notify(reviewStatus.label())
+    /**
+     * 扫码评论: open 图评 on the photo in front of you, and get out of its way.
+     *
+     * One press does the four things this used to take a row and three presses to do
+     * (docs/tuping-design.md §17.29):
+     *
+     *  - **it registers this photo** — the only thing in the app that puts a picture on
+     *    somebody else's server outside a show that carries 图评 (§17.28). A photo that was
+     *    opened before is recognised by the server and simply comes back with its code;
+     *  - **it closes the information band**, which is not tidiness: the code is only drawn
+     *    when the band is *not* up, because that is the band's space. This is why "退出详情页"
+     *    and "出码" are the same action rather than two;
+     *  - **it turns the danmaku on** if it was off — the layer is a preference now, and
+     *    somebody asking for comments on this photo is asking to see them;
+     *  - **it says what happened**, because a television has no console: the toast carries
+     *    the last reason the server gave, or the confirmation.
+     */
+    fun scanToComment() {
+        // Read before the attempt: the status is the *previous* answer, and the press is
+        // about to make a new one. A failure is what a person needs to hear, and the settings
+        // row has the detail either way.
+        val lastFailure = (reviewStatus as? ReviewStatus.Failed)?.label()
+        viewModel.armReviewedPhoto(
+            item = current,
+            source = reviewSource,
+            screenSaver = screenSaver,
+            slideshow = slideshowRunning,
+        )
+        if (danmakuLevel == DanmakuLevel.OFF) viewModel.setDanmakuLevel(DanmakuLevel.FEW)
+        showInfo = false
+        notify(lastFailure ?: scanOpened)
     }
 
     /**
@@ -1229,45 +1284,11 @@ fun ViewerScreen(
         }
     }
 
-    /**
-     * The 图评 row: down the rows, sideways to change a value.
-     *
-     * The two switches are two-option steppers rather than toggles-on-OK, so that left and
-     * right — which the arrows advertise as "change this" — do something on every row, and
-     * OK does the same thing as a right press. It is the same shape as the slideshow row
-     * beside it, which is what makes one remote do both without a second set of habits.
-     */
-    fun stepReviewRow(delta: Int) {
-        when (reviewFocus) {
-            REVIEW_ROW_QR -> {
-                val show = !reviewShowQr
-                viewModel.setReviewShowQr(show)
-                notify(if (show) reviewQrOnLabel else reviewQrOffLabel)
-            }
-
-            REVIEW_ROW_DANMAKU -> {
-                val show = !reviewShowDanmaku
-                viewModel.setReviewShowDanmaku(show)
-                notify(if (show) reviewDanmakuOnLabel else reviewDanmakuOffLabel)
-            }
-
-            // Three options, so this one really does step.
-            else -> {
-                val level = danmakuLevel.next()
-                viewModel.setDanmakuLevel(level)
-                notify(danmakuLevelLabel(level))
-            }
-        }
-    }
-
-    /** OK on a 图评 row behaves like a right press. */
-    fun activateReviewRow() = stepReviewRow(+1)
-
     // Back closes the track list if it is up — focus stays on the 背景音乐 pill it was
     // opened from — and otherwise closes the open row, leaving its button up. Pressing it
     // again leaves the viewer, which is the enclosing BackHandler's job. Deliberately not
     // also bound to the info band, so one Back never has two meanings.
-    BackHandler(enabled = cornerMenu != null) {
+    BackHandler(enabled = slideshowRowOpen) {
         if (musicListOpen) musicListOpen = false else closeSettings()
     }
 
@@ -1295,39 +1316,27 @@ fun ViewerScreen(
                 //
                 // While a row or the list is up, up/down walk it and left/right change the
                 // value under the cursor, so nothing moves underneath.
-                val inMusicList = showInfo && cornerMenu == CornerMenu.SLIDESHOW && musicListOpen
-                val inSlideSettings = showInfo && cornerMenu == CornerMenu.SLIDESHOW && !inMusicList
-                val inReviewMenu = showInfo && cornerMenu == CornerMenu.REVIEW
+                val inMusicList = showInfo && slideshowRowOpen && musicListOpen
+                val inSlideSettings = showInfo && slideshowRowOpen && !inMusicList
 
-                // The cursor into either row is read and written in exactly two places —
-                // here, for vertical movement, and `changeValue`, for the sideways one — so
-                // neither row can drift out of step with what is drawn.
+                // The cursor into the row is read and written in exactly two places — here,
+                // for vertical movement, and `changeValue`, for the sideways one — so the row
+                // cannot drift out of step with what is drawn. It walks the rows that are
+                // *drawn* rather than a fixed count: the 图评 switch is not there when there is
+                // no server to carry it, and a fixed count would park the D-pad on nothing.
                 fun stepRow(delta: Int) {
-                    when (cornerMenu) {
-                        CornerMenu.SLIDESHOW ->
-                            settingFocus = (settingFocus + delta + SETTING_COUNT) % SETTING_COUNT
-
-                        CornerMenu.REVIEW ->
-                            reviewFocus = (reviewFocus + delta + REVIEW_ROW_COUNT) % REVIEW_ROW_COUNT
-
-                        null -> Unit
-                    }
+                    if (!slideshowRowOpen) return
+                    val rows = settingRows(reviewControlsVisible)
+                    val at = rows.indexOf(settingFocus).coerceAtLeast(0)
+                    settingFocus = rows[(at + delta + rows.size) % rows.size]
                 }
 
                 fun changeValue(delta: Int) {
-                    when (cornerMenu) {
-                        CornerMenu.SLIDESHOW -> stepSetting(delta)
-                        CornerMenu.REVIEW -> stepReviewRow(delta)
-                        null -> Unit
-                    }
+                    if (slideshowRowOpen) stepSetting(delta)
                 }
 
                 fun activateRow() {
-                    when (cornerMenu) {
-                        CornerMenu.SLIDESHOW -> activateSetting()
-                        CornerMenu.REVIEW -> activateReviewRow()
-                        null -> Unit
-                    }
+                    if (slideshowRowOpen) activateSetting()
                 }
 
                 when (event.key) {
@@ -1343,8 +1352,8 @@ fun ViewerScreen(
                     Key.DirectionLeft -> {
                         when {
                             inMusicList -> Unit
-                            inSlideSettings || inReviewMenu -> stepRow(-1)
-                            cornerRow -> mainFocus = stepCorner(mainFocus, -1, canLoadOriginal, reviewDisabled)
+                            inSlideSettings -> stepRow(-1)
+                            cornerRow -> mainFocus = stepCorner(mainFocus, -1, canLoadOriginal, canScan, reviewDisabled)
                             else -> queueStep(-1)
                         }
                         true
@@ -1353,8 +1362,8 @@ fun ViewerScreen(
                     Key.DirectionRight -> {
                         when {
                             inMusicList -> Unit
-                            inSlideSettings || inReviewMenu -> stepRow(+1)
-                            cornerRow -> mainFocus = stepCorner(mainFocus, +1, canLoadOriginal, reviewDisabled)
+                            inSlideSettings -> stepRow(+1)
+                            cornerRow -> mainFocus = stepCorner(mainFocus, +1, canLoadOriginal, canScan, reviewDisabled)
                             else -> queueStep(1)
                         }
                         true
@@ -1370,14 +1379,14 @@ fun ViewerScreen(
                     Key.DirectionUp -> {
                         when {
                             inMusicList -> moveMusicCursor(-1)
-                            inSlideSettings || inReviewMenu -> changeValue(-1)
+                            inSlideSettings -> changeValue(-1)
                             onSlideshowButton -> {
                                 showInfo = false
                                 closeSettings()
                             }
 
-                            onReviewButton || onOriginalButton ->
-                                mainFocus = stepCorner(mainFocus, -1, canLoadOriginal, reviewDisabled)
+                            onScanButton || onOriginalButton ->
+                                mainFocus = stepCorner(mainFocus, -1, canLoadOriginal, canScan, reviewDisabled)
 
                             else -> {
                                 showInfo = true
@@ -1394,7 +1403,7 @@ fun ViewerScreen(
                     Key.DirectionDown -> {
                         when {
                             inMusicList -> moveMusicCursor(+1)
-                            inSlideSettings || inReviewMenu -> changeValue(+1)
+                            inSlideSettings -> changeValue(+1)
                             else -> {
                                 showInfo = false
                                 closeSettings()
@@ -1413,10 +1422,10 @@ fun ViewerScreen(
 
                             onOriginalButton -> requestOriginal()
 
-                            onReviewButton -> openReviewMenu()
+                            onScanButton -> scanToComment()
 
                             onSlideshowButton -> {
-                                cornerMenu = CornerMenu.SLIDESHOW
+                                slideshowRowOpen = true
                                 settingFocus = SETTING_PLAY
                             }
 
@@ -1492,7 +1501,7 @@ fun ViewerScreen(
         // focusable. When 图评 is off, the server is unreachable, or the 图评 button has
         // switched the layer off, this draws nothing at all — a missing layer is the
         // intended failure mode (§9.3).
-        if (reviewReady != null && !current.isVideo && reviewShowDanmaku) {
+        if (reviewReady != null && !current.isVideo && danmakuDrawn(danmakuLevel)) {
             DanmakuOverlay(
                 comments = reviewReady.comments,
                 level = danmakuLevel,
@@ -1511,7 +1520,7 @@ fun ViewerScreen(
         // they want it at all. Never in a screensaver: the code is addressed to somebody
         // standing in front of the television with a phone in their hand, and a screensaver
         // is on precisely because nobody is in the room.
-        if (reviewReady != null && !current.isVideo && !showInfo && reviewShowQr && !screenSaver) {
+        if (reviewReady != null && !current.isVideo && !showInfo && !screenSaver) {
             ReviewQrCode(
                 pngFile = reviewReady.qrFile,
                 label = stringResource(R.string.viewer_qr_hint),
@@ -1575,21 +1584,17 @@ fun ViewerScreen(
                 )
                 Spacer(Modifier.width(32.dp))
                 SlideshowControls(
-                    menu = cornerMenu,
-                    onReviewButton = onReviewButton,
+                    slideshowRowOpen = slideshowRowOpen,
+                    onScanButton = onScanButton,
                     reviewDisabled = reviewDisabled,
+                    canScan = canScan,
+                    scanLabel = scanLabel,
                     onMainButton = onSlideshowButton,
                     onOriginalButton = onOriginalButton,
                     originalAvailable = canLoadOriginal,
                     originalLoading = originalLoading,
                     settingFocus = settingFocus,
-                    reviewFocus = reviewFocus,
-                    reviewQrLabel = reviewQrLabel,
-                    reviewDanmakuLabel = reviewDanmakuLabel,
-                    reviewAmountLabel = reviewAmountLabel,
-                    reviewQrValue = if (reviewShowQr) switchOn else switchOff,
-                    reviewDanmakuValue = if (reviewShowDanmaku) switchOn else switchOff,
-                    reviewAmountValue = danmakuLevelLabel(danmakuLevel),
+                    reviewControlsVisible = reviewControlsVisible,
                     reviewSlideshowLabel = reviewSlideshowLabel,
                     reviewSlideshowEnabled = reviewSlideshowEnabled,
                     switchOn = switchOn,
@@ -1806,33 +1811,50 @@ private const val SETTING_MUSIC = 3
 /**
  * 图评's switch, in the slideshow's own row.
  *
- * It is here and not in the 图评 row because it is a question about the *show*, not about
- * the photo on screen: a host decides once whether the corner of every picture in a party
- * slideshow carries a code. The per-photo switches live in the 图评 row, where they belong.
+ * It is here and not in the corner because it is a question about the *show*, not about the
+ * photo on screen: a host decides once whether every picture in a party slideshow carries a
+ * code, where the corner's 扫码评论 opens 图评 on the one photo in front of them (§17.29).
  */
 private const val SETTING_REVIEW = 4
-private const val SETTING_COUNT = 5
 
-/** The buttons in the corner, left to right: 原图, 图评, 幻灯片. */
+/**
+ * Every control the slideshow's row can hold, in the order they are drawn.
+ *
+ * The D-pad walks this list, exactly as it walks the corner's buttons, so a control that is
+ * not drawn is stepped over rather than left as a hole. The one that can be absent is 图评:
+ * with no server address, or the mode at 关, the layer has nothing to carry and the switch is
+ * not drawn at all (docs/tuping-design.md §17.30).
+ */
+private val SETTING_ROWS =
+    listOf(SETTING_PLAY, SETTING_INTERVAL, SETTING_ORDER, SETTING_MUSIC, SETTING_REVIEW)
+
+/** Which controls the slideshow's row holds for this screen, in drawing order. */
+private fun settingRows(reviewControlsVisible: Boolean): List<Int> =
+    SETTING_ROWS.filterNot { it == SETTING_REVIEW && !reviewControlsVisible }
+
+/** The buttons in the corner, left to right: 原图, 扫码评论, 幻灯片. */
 private const val MAIN_ORIGINAL = 0
-private const val MAIN_REVIEW = 1
+private const val MAIN_SCAN = 1
 private const val MAIN_SLIDESHOW = 2
 
 /**
  * Every corner button, always, in the order they are drawn.
  *
  * The D-pad walks this list and the drawing maps it to what is actually visible, so a
- * button that is absent (原图 with no original behind the thumbnail) is stepped over
- * rather than left as a hole — which is what a fixed index would have produced.
+ * button that is absent (原图 with no original behind the thumbnail, 扫码评论 on a video) is
+ * stepped over rather than left as a hole — which is what a fixed index would have produced.
  */
-private val MAIN_BUTTONS = listOf(MAIN_ORIGINAL, MAIN_REVIEW, MAIN_SLIDESHOW)
+private val MAIN_BUTTONS = listOf(MAIN_ORIGINAL, MAIN_SCAN, MAIN_SLIDESHOW)
 
 /** Which corner buttons exist for the photo on screen, in drawing order. */
-private fun cornerButtons(canLoadOriginal: Boolean, reviewDisabled: Boolean): List<Int> =
-    MAIN_BUTTONS.filterNot { button ->
-        (button == MAIN_ORIGINAL && !canLoadOriginal) ||
-            (button == MAIN_REVIEW && reviewDisabled)
-    }
+private fun cornerButtons(
+    canLoadOriginal: Boolean,
+    canScan: Boolean,
+    reviewDisabled: Boolean,
+): List<Int> = MAIN_BUTTONS.filterNot { button ->
+    (button == MAIN_ORIGINAL && !canLoadOriginal) ||
+        (button == MAIN_SCAN && (!canScan || reviewDisabled))
+}
 
 /**
  * Which corner button the D-pad is handed on opening the band.
@@ -1853,37 +1875,33 @@ private fun cornerFocus(canLoadOriginal: Boolean): Int =
  * closes it. Wrapping rather than clamping, because a press that does nothing at all reads
  * as a broken key rather than as a row that has run out.
  */
-private fun stepCorner(focus: Int, delta: Int, canLoadOriginal: Boolean, reviewDisabled: Boolean): Int {
-    val order = cornerButtons(canLoadOriginal, reviewDisabled)
+private fun stepCorner(focus: Int, delta: Int, canLoadOriginal: Boolean, canScan: Boolean, reviewDisabled: Boolean): Int {
+    val order = cornerButtons(canLoadOriginal, canScan, reviewDisabled)
     val at = order.indexOf(focus).coerceAtLeast(0)
     return order[(at + delta + order.size) % order.size]
 }
 
 /**
- * The bottom-right corner: the 图评 / 原图 / 幻灯片 buttons, and the row of controls that
- * the one under the cursor opens above itself.
+ * The bottom-right corner: the 原图 / 扫码评论 / 幻灯片 buttons, and the slideshow's row of
+ * controls that the last of them opens above itself.
  *
  * The controls are not individually focusable — the viewer's root box owns focus and
- * routes the D-pad — so the highlighted one is drawn from `mainFocus` and the two row
- * cursors instead.
+ * routes the D-pad — so the highlighted one is drawn from `mainFocus` and the row's own
+ * cursor instead.
  */
 @Composable
 private fun SlideshowControls(
-    menu: CornerMenu?,
-    onReviewButton: Boolean,
+    slideshowRowOpen: Boolean,
+    onScanButton: Boolean,
     reviewDisabled: Boolean,
+    canScan: Boolean,
+    scanLabel: String,
     onMainButton: Boolean,
     onOriginalButton: Boolean,
     originalAvailable: Boolean,
     originalLoading: Boolean,
     settingFocus: Int,
-    reviewFocus: Int,
-    reviewQrLabel: String,
-    reviewDanmakuLabel: String,
-    reviewAmountLabel: String,
-    reviewQrValue: String,
-    reviewDanmakuValue: String,
-    reviewAmountValue: String,
+    reviewControlsVisible: Boolean,
     reviewSlideshowLabel: String,
     reviewSlideshowEnabled: Boolean,
     switchOn: String,
@@ -1901,8 +1919,11 @@ private fun SlideshowControls(
     orderShuffleLabel: String,
     modifier: Modifier = Modifier,
 ) {
-    val inSlideshowRow = menu == CornerMenu.SLIDESHOW
-    val inReviewRow = menu == CornerMenu.REVIEW
+    val inSlideshowRow = slideshowRowOpen
+    // Absent rather than greyed when it could not be used, which is what 原图 already does
+    // and what the D-pad's own list says: a button that is drawn but skipped is a button the
+    // person will try to reach.
+    val scanAvailable = canScan && !reviewDisabled
     val musicSummary = if (selectedMusic.isEmpty()) {
         stringResource(R.string.viewer_music_none)
     } else {
@@ -1952,42 +1973,30 @@ private fun SlideshowControls(
                 )
                 // 图评, which is a question about the show rather than about the photo: a
                 // host decides once whether the corner of every picture carries a code.
-                ActionStepper(
-                    label = reviewSlideshowLabel,
-                    value = if (reviewSlideshowEnabled) switchOn else switchOff,
-                    selected = settingFocus == SETTING_REVIEW,
-                )
-            }
-        }
-
-        // 图评's row. Three steppers rather than a mixed bag of switches, so the arrows
-        // mean the same thing on every one of them.
-        AnimatedVisibility(visible = inReviewRow, enter = fadeIn(), exit = fadeOut()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ActionStepper(
-                    label = reviewQrLabel,
-                    value = reviewQrValue,
-                    selected = reviewFocus == REVIEW_ROW_QR,
-                )
-                ActionStepper(
-                    label = reviewDanmakuLabel,
-                    value = reviewDanmakuValue,
-                    selected = reviewFocus == REVIEW_ROW_DANMAKU,
-                )
-                ActionStepper(
-                    label = reviewAmountLabel,
-                    value = reviewAmountValue,
-                    selected = reviewFocus == REVIEW_ROW_AMOUNT,
-                )
+                //
+                // Only drawn when there is a server to carry it (§17.30): an unconfigured
+                // television has no business offering a switch that could not do anything if
+                // it were thrown, and Settings — where the address is typed — is where it
+                // comes back from.
+                if (reviewControlsVisible) {
+                    ActionStepper(
+                        label = reviewSlideshowLabel,
+                        value = if (reviewSlideshowEnabled) switchOn else switchOff,
+                        selected = settingFocus == SETTING_REVIEW,
+                    )
+                }
             }
         }
 
         // The corner itself, left to right: 原图 — while there is an original behind the
-        // thumbnail on screen — then 图评, and then 幻灯片, which is where the slideshow's
-        // settings row above opens from.
+        // thumbnail on screen — then **扫码评论**, and then 幻灯片, which is where the
+        // slideshow's settings row above opens from.
+        //
+        // 扫码评论 is an action, not a switch: it opens 图评 on the photo in front of you and
+        // gets out of the way (§17.29). It is absent on a video (there is no still to comment
+        // on) and greyed when nothing could come of pressing it (no address, or 图评 off) —
+        // the same shape 原图 has, and the reason the row's contents are a list rather than
+        // three fixed buttons.
         Row(
             horizontalArrangement = Arrangement.spacedBy(9.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1995,11 +2004,12 @@ private fun SlideshowControls(
             if (originalAvailable) {
                 OriginalButton(selected = onOriginalButton, loading = originalLoading)
             }
-            ActionButton(
-                label = stringResource(R.string.viewer_action_review),
-                selected = onReviewButton,
-                disabled = reviewDisabled,
-            )
+            if (scanAvailable) {
+                ActionButton(
+                    label = scanLabel,
+                    selected = onScanButton,
+                )
+            }
             ActionButton(
                 label = stringResource(R.string.viewer_action_slideshow),
                 selected = onMainButton,

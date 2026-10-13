@@ -49,15 +49,16 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.tvphoto.BuildConfig
 import com.tvphoto.R
+import com.tvphoto.data.IMAGE_CACHE_CEILING_BYTES
 import com.tvphoto.data.PreviewOriginal
 import com.tvphoto.data.SLIDESHOW_MUSIC
 import com.tvphoto.data.SessionState
 import com.tvphoto.data.SettingsStore
 import com.tvphoto.data.ThemeMode
 import com.tvphoto.data.fn.SignMode
+import com.tvphoto.data.review.DanmakuLevel
 import com.tvphoto.data.review.ReviewMode
 import com.tvphoto.data.review.ReviewStatus
-import com.tvphoto.data.review.ReviewUploadScope
 import com.tvphoto.ui.ContentState
 import com.tvphoto.ui.HomeSection
 import com.tvphoto.ui.MainViewModel
@@ -503,6 +504,26 @@ private fun GeneralPane(viewModel: MainViewModel, paneTop: FocusRequester) {
         )
     }
 
+    /**
+     * Why the ceiling in that line may be smaller than the 5 GB the app promises.
+     *
+     * The cache is built at a quarter of the space the box could spare, so a television
+     * whose storage is nearly full gets a smaller cache — deliberately, because a 5 GB
+     * cache on 1 GB of free space is a cache Android deletes (§ ImageCacheSize). Without
+     * this sentence the smaller number reads as a fault, and the person's next move is to
+     * clear the cache, which is the one action that guarantees the re-downloads the
+     * smaller number exists to prevent.
+     */
+    @Composable
+    fun cacheHint(): String? {
+        val pair = cachedPair ?: return null
+        if (pair.second >= IMAGE_CACHE_CEILING_BYTES) return null
+        return stringResource(
+            R.string.settings_cache_capped,
+            formatFileSize(IMAGE_CACHE_CEILING_BYTES),
+        )
+    }
+
     Pane(
         title = R.string.settings_pane_general,
         caption = stringResource(R.string.settings_general_caption),
@@ -558,6 +579,7 @@ private fun GeneralPane(viewModel: MainViewModel, paneTop: FocusRequester) {
         ActionRow(
             label = stringResource(R.string.settings_cache),
             value = cacheUsage(),
+            hint = cacheHint(),
             valueColor = MaterialTheme.colorScheme.primary,
             onClick = {
                 viewModel.clearImageCache()
@@ -730,7 +752,7 @@ private fun SlideshowPane(viewModel: MainViewModel, paneTop: FocusRequester) {
 @Composable
 private fun ReviewPane(viewModel: MainViewModel, paneTop: FocusRequester) {
     val reviewMode by viewModel.reviewMode.collectAsStateWithLifecycle()
-    val reviewUploadScope by viewModel.reviewUploadScope.collectAsStateWithLifecycle()
+    val danmakuLevel by viewModel.danmakuLevel.collectAsStateWithLifecycle()
     val extendStayOnComment by viewModel.extendStayOnComment.collectAsStateWithLifecycle()
     val reviewStatus by viewModel.reviewStatus.collectAsStateWithLifecycle()
 
@@ -790,16 +812,20 @@ private fun ReviewPane(viewModel: MainViewModel, paneTop: FocusRequester) {
             )
         }
 
+        // 弹幕: the amount *is* the switch (关 / 少 / 多), which is why there is no second row
+        // for it. It moved here from the viewer's 图评 menu in §17.29, when that menu became
+        // the single 扫码评论 button: what the corner does is a decision about one photo,
+        // while how much danmaku to draw is a preference.
         ActionRow(
-            label = stringResource(R.string.settings_review_scope),
-            value = when (reviewUploadScope) {
-                // Not `settings_preview_original_slideshow`: that is the *preview* row's
-                // word for its own option, and borrowing it here made this row read
-                // "仅用于幻灯片播放" — a sentence about a different setting entirely.
-                ReviewUploadScope.CURRENT -> stringResource(R.string.settings_review_scope_current)
-                ReviewUploadScope.ALL -> stringResource(R.string.settings_review_scope_all)
+            label = stringResource(R.string.settings_review_danmaku_amount),
+            value = when (danmakuLevel) {
+                DanmakuLevel.OFF -> stringResource(R.string.settings_review_danmaku_off)
+                DanmakuLevel.FEW -> stringResource(R.string.settings_review_danmaku_few)
+                DanmakuLevel.MANY -> stringResource(R.string.settings_review_danmaku_many)
             },
-            onClick = { viewModel.setReviewUploadScope(reviewUploadScope.next()) },
+            hint = stringResource(R.string.settings_review_danmaku_hint),
+            valueColor = MaterialTheme.colorScheme.primary,
+            onClick = { viewModel.setDanmakuLevel(danmakuLevel.next()) },
         )
 
         ActionRow(

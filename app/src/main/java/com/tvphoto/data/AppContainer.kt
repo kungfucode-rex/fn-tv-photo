@@ -140,10 +140,16 @@ class AppContainer(context: Context) {
      * Points Coil at the authenticated client. Thumbnails need the `AccessToken`
      * header but no signature, so plain image URLs work.
      *
-     * The disk cache is a journaled LRU: once it exceeds [DISK_CACHE_BYTES] the least
-     * recently used entries are evicted automatically, which is exactly the "keep 5 GB,
-     * drop the oldest" behaviour. Video never reaches this cache — Media3 streams with
-     * no cache configured, and the prefetcher is only ever handed stills.
+     * The disk cache is a journaled LRU: once it exceeds its budget the least recently
+     * used entries are evicted automatically, which is exactly the "keep as much as we
+     * may, drop the oldest" behaviour. Video never reaches this cache — Media3 streams
+     * with no cache configured, and the prefetcher is only ever handed stills.
+     *
+     * The budget is the product's 5 GB *or a quarter of what the volume can actually
+     * spare, whichever is smaller* — see [imageCacheBudgetBytes] for the measurement that
+     * forced the second half. A fixed 5 GB on a television with one or two GB free grows
+     * until Android deletes the cache directory, and every deletion costs a full pass over
+     * the album the show is about to ask for again.
      *
      * The disk cache is also the one part of start-up that touches storage the app does
      * not control: a cache directory the system has half-cleaned, a full volume, a
@@ -162,10 +168,30 @@ class AppContainer(context: Context) {
         }
     }
 
-    private fun buildDiskCache(): DiskCache = DiskCache.Builder()
-        .directory(appContext.cacheDir.resolve("image_cache").absolutePath.toPath())
-        .maxSizeBytes(DISK_CACHE_BYTES)
-        .build()
+    /**
+     * The disk cache, at the budget this box can actually keep.
+     *
+     * The size is decided here and only here, and the settings row reads it back off the
+     * cache (`DiskCache.maxSize`) rather than being told it separately: two copies of "how
+     * big is the cache" is one copy too many, and the one the LRU actually obeys is the
+     * interesting one.
+     */
+    private fun buildDiskCache(): DiskCache {
+        val dir = appContext.cacheDir.resolve("image_cache")
+        // `usableSpace` rather than `freeSpace`: this is the number the platform will
+        // actually let us write, which on Android accounts for any per-app quota.
+        val usable = appContext.cacheDir.usableSpace
+        val budget = imageCacheBudgetBytes(usable)
+        // Said out loud because the size is otherwise invisible: the settings row shows
+        // what is *used* and what the ceiling is, while "the ceiling is small because the
+        // box is nearly full" is the diagnosis this line answers when a television is
+        // burning data it should not be.
+        Log.i(TAG, "image cache budget ${budget / MIB} MiB (volume has ${usable / MIB} MiB free)")
+        return DiskCache.Builder()
+            .directory(dir.absolutePath.toPath())
+            .maxSizeBytes(budget)
+            .build()
+    }
 
     private fun imageLoader(context: Context, diskCache: DiskCache?): ImageLoader =
         ImageLoader.Builder(context)
@@ -185,8 +211,8 @@ class AppContainer(context: Context) {
     }
 
     private companion object {
-        /** 5 GB of image cache, LRU-evicted. */
-        const val DISK_CACHE_BYTES = 5L * 1024 * 1024 * 1024
+        /** For the one log line that turns MiB into something readable. */
+        const val MIB = 1024L * 1024L
 
         const val TAG = "AppContainer"
     }

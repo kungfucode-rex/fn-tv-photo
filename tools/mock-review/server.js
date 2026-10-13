@@ -1282,13 +1282,16 @@ function issueCode(photo) {
   throw new Error('could not mint a unique code');
 }
 
-function handlePhotoGet(req, res, code) {
-  if (!validCode(code)) return fail(res, 'not_found', 404, '短码无效');
-  const imageId = state.codes.get(code);
-  const photo = imageId ? state.photos.get(imageId) : null;
-  if (!photo) return fail(res, 'not_found', 404, '这张照片不在图评里');
+/**
+ * The body `GET /v1/photos/{code}` and `GET /v1/photos/by-local` both answer with.
+ *
+ * Shared so the two cannot drift: the album end keys its cache by local id and then fetches
+ * comments by `imageId`, so two endpoints disagreeing about that id would be two threads for
+ * one picture (§17.28).
+ */
+function photoDetailBody(req, photo, code) {
   const base = requestBaseUrl(req);
-  return sendJson(res, {
+  return {
     imageId: photo.id,
     code,
     scope: photo.scope,
@@ -1299,7 +1302,45 @@ function handlePhotoGet(req, res, code) {
     height: photo.height,
     visibility: photo.visibility,
     serverTime: Date.now(),
-  });
+  };
+}
+
+function handlePhotoGet(req, res, code) {
+  if (!validCode(code)) return fail(res, 'not_found', 404, '短码无效');
+  const imageId = state.codes.get(code);
+  const photo = imageId ? state.photos.get(imageId) : null;
+  if (!photo) return fail(res, 'not_found', 404, '这张照片不在图评里');
+  return sendJson(res, photoDetailBody(req, photo, code));
+}
+
+/**
+ * "Have I already registered this picture?" answered as a **read** (§17.28).
+ *
+ * The album end's only handle on a photo before the server has spoken is the id its own
+ * library uses, and this is what turns it into a code — without uploading a thumbnail, and
+ * without creating anything. A miss is a 404 and means exactly one thing: nobody has opened
+ * 图评 on this photo from this device.
+ *
+ * Nothing here writes, and there is deliberately no freshness window over `deviceLocal`: the
+ * window in the real service is about whether a thumbnail has to be sent again, which is a
+ * question about bytes, while this one is about identity.
+ */
+function handlePhotoByLocal(req, res, url) {
+  const identity = requireDevice(req, res);
+  if (!identity) return;
+
+  const source = String(url.searchParams.get('source') || '').trim();
+  const localId = String(url.searchParams.get('localId') || '').trim();
+  if (!source || !localId) {
+    return badRequest(res, 'GET /v1/photos/by-local: needs both source and localId');
+  }
+
+  const remembered = state.deviceLocal.get(`${identity.id}|${source}|${localId}`);
+  const photo = remembered ? state.photos.get(remembered.imageId) : null;
+  if (!photo || !photo.code) {
+    return fail(res, 'not_found', 404, '这台设备还没给这张照片开过图评');
+  }
+  return sendJson(res, photoDetailBody(req, photo, photo.code));
 }
 
 /**
@@ -1970,6 +2011,12 @@ async function route(req, res, url) {
 
   if (path === '/v1/devices' && method === 'POST') return handleDeviceRegister(req, res);
   if (path === '/v1/photos' && method === 'POST') return handlePhotoRegister(req, res);
+
+  // Ahead of the wildcard below, and it has to be: `/v1/photos/by-local` would otherwise be
+  // read as a code and answered "短码无效", which is a dead endpoint that looks alive.
+  if (path === '/v1/photos/by-local' && method === 'GET') {
+    return handlePhotoByLocal(req, res, url);
+  }
 
   if (path.startsWith('/v1/photos/')) {
     const rest = path.slice('/v1/photos/'.length);

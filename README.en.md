@@ -106,12 +106,27 @@ Slideshow:
 图评 (photo review — a QR code on the TV, comments from a phone drifting across the photo):
 
 - Needs a server of your own; see **The 图评 server** below.
-- By default it appears **only while a slideshow is playing**. A QR code sits in the bottom
-  corner of the photo; scanning it opens an H5 page on the phone where a guest can write without
-  an app or an account, and their comment drifts across the photo as danmaku.
-- The **图评** button in the viewer's corner governs **this photo**: QR on/off, danmaku on/off,
-  danmaku amount (off / few / many). **Settings → Photo review** holds the six defaults: mode,
-  server, connection status, upload scope, and whether an arriving comment holds the photo.
+- **A photo has to be opened for review before the server knows about it.** Preview a photo,
+  press ↑ for the information band, and press **Scan to comment**: the band closes, the QR
+  code appears in the corner, and the danmaku comes on — all at once. Simply looking at photos
+  uploads nothing; until you press that button the server does not know the picture exists.
+- A photo that was opened before is recognised afterwards and shows its code and its danmaku
+  straight away, **without being uploaded again**. A second television has to open each photo
+  once for itself.
+- The danmaku is automatic: the server has comments for this photo and they drift across it;
+  the server has none and nothing is drawn. The H5 page behind the code needs no app and no
+  account — guests may write as 匿名.
+- **A whole slideshow can carry review**: press **幻灯片** in the viewer and turn on the last row
+  (**图评**), which is off by default. That show registers each photo as it appears — the party
+  case — while with it off only the photos you opened by hand have a code.
+- **The danmaku amount (关 / 少 / 多) lives in Settings → Photo review.** It governs the font
+  size, the number of lanes and whether recent comments are replayed, and **关 means no danmaku
+  at all**. The viewer's corner no longer has a review menu — just the one **Scan to comment**
+  action.
+- **With no review server configured — or 图评 set to 关 — neither the Scan to comment button
+  nor the slideshow row's 图评 switch is drawn at all.** Two controls with no server behind them
+  are an invitation to press a button that cannot answer. Filling the address in brings both
+  back, and Settings → Photo review is where the address goes.
 - **A comment deleted on the phone leaves the TV**: the server pushes a comment's *state*, and
   the TV replaces its copy of that id. A line already crossing finishes its pass.
 - Photos only: a video gets no QR code and no danmaku layer.
@@ -152,8 +167,12 @@ Settings and the rest:
   the session exactly as a fresh login would (access-code gate included), so there is no need to
   sign out and back in. Only a genuine failure — a changed access code, say — falls back to the
   login form, with the server's own reason on it.
-- **Image cache** — **Settings → General → Clear image cache**: capped at **5 GB**, LRU-evicted;
-  images only, since video streams and is never written to disk.
+- **Image cache** — **Settings → General → Clear image cache**: capped at **5 GB**, and never more
+  than a quarter of the space the device has free (TV boxes often have only a gigabyte or two, and a
+  cache that fills the volume is, to Android, simply a cache to delete — after which the whole album
+  is downloaded again). LRU-evicted; images only, since video streams and is never written to disk.
+  The settings row shows both what is used and the ceiling actually in force, and says so when free
+  space lowered it.
 - **When it crashes on the TV** — uncaught exceptions are written to `files/last-crash.txt`, and
   the first line of the most recent one shows under **Settings → General → Last crash**, where
   somebody holding the remote can read it out.
@@ -293,8 +312,8 @@ connecting" — the address in a code is the one the TV reported when it registe
 
 Then on the TV: **Settings → Photo review → Review server** takes **the same address**
 (`http://192.168.31.14:8080` and so on — the phone has to be able to open it too). Preview a
-photo, press 图评 → the QR code appears → scan it with the phone and write a comment → the
-comment drifts across the TV.
+photo, press ↑, press **Scan to comment** → the QR code appears → scan it with the phone and
+write a comment → the comment drifts across the TV.
 
 ### When something is wrong
 

@@ -27,10 +27,11 @@ import com.tvphoto.data.music.MusicUploadServer
 import com.tvphoto.data.normalizeMusicSelection
 import com.tvphoto.data.review.DanmakuLevel
 import com.tvphoto.data.review.ReviewCandidate
+import com.tvphoto.data.review.ReviewDecision
 import com.tvphoto.data.review.ReviewMode
 import com.tvphoto.data.review.ReviewStatus
-import com.tvphoto.data.review.ReviewUploadScope
 import com.tvphoto.data.review.ReviewView
+import com.tvphoto.data.review.reviewDecision
 import com.tvphoto.domain.AlbumItem
 import com.tvphoto.domain.FolderItem
 import com.tvphoto.domain.MediaItem
@@ -429,9 +430,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _reviewMode = MutableStateFlow(container.reviewSettings.mode)
     val reviewMode: StateFlow<ReviewMode> = _reviewMode.asStateFlow()
 
-    private val _reviewUploadScope = MutableStateFlow(container.reviewSettings.uploadScope)
-    val reviewUploadScope: StateFlow<ReviewUploadScope> = _reviewUploadScope.asStateFlow()
-
     private val _danmakuLevel = MutableStateFlow(container.reviewSettings.danmakuLevel)
     val danmakuLevel: StateFlow<DanmakuLevel> = _danmakuLevel.asStateFlow()
 
@@ -440,12 +438,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _reviewSlideshowEnabled = MutableStateFlow(container.reviewSettings.slideshowEnabled)
     val reviewSlideshowEnabled: StateFlow<Boolean> = _reviewSlideshowEnabled.asStateFlow()
-
-    private val _reviewShowQr = MutableStateFlow(container.reviewSettings.showQr)
-    val reviewShowQr: StateFlow<Boolean> = _reviewShowQr.asStateFlow()
-
-    private val _reviewShowDanmaku = MutableStateFlow(container.reviewSettings.showDanmaku)
-    val reviewShowDanmaku: StateFlow<Boolean> = _reviewShowDanmaku.asStateFlow()
 
     /**
      * What the review layer is doing, straight from the repository.
@@ -1170,11 +1162,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         refreshReviewStatus()
     }
 
-    fun setReviewUploadScope(scope: ReviewUploadScope) {
-        container.reviewSettings.uploadScope = scope
-        _reviewUploadScope.value = container.reviewSettings.uploadScope
-    }
-
     fun setDanmakuLevel(level: DanmakuLevel) {
         container.reviewSettings.danmakuLevel = level
         _danmakuLevel.value = container.reviewSettings.danmakuLevel
@@ -1190,18 +1177,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _reviewSlideshowEnabled.value = container.reviewSettings.slideshowEnabled
     }
 
-    /** The viewer's 图评 button: whether the code is drawn. */
-    fun setReviewShowQr(show: Boolean) {
-        container.reviewSettings.showQr = show
-        _reviewShowQr.value = container.reviewSettings.showQr
-    }
-
-    /** The viewer's 图评 button: whether the danmaku layer is drawn. */
-    fun setReviewShowDanmaku(show: Boolean) {
-        container.reviewSettings.showDanmaku = show
-        _reviewShowDanmaku.value = container.reviewSettings.showDanmaku
-    }
-
     /**
      * Asks the review server how it is doing, for the one row that can report it.
      *
@@ -1213,57 +1188,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * Whether 图评 applies to the photo on screen right now.
+     * What should happen about 图评 for the photo on screen — see `reviewDecision`.
      *
-     * The facts this needs — is this a video, is a slideshow playing — come from the viewer
-     * rather than being guessed at here. A video is never eligible: it has its own rhythm,
-     * exactly like the QR code (docs/tuping-design.md §9.5).
+     * The facts this needs — is this a video, is a show running, is this the screensaver —
+     * come from the viewer rather than being guessed at here. The rule itself lives in
+     * `reviewDecision`, where a unit test can pin it; this is the wiring that gives it the
+     * settings.
      *
-     * **The mode is deliberately not consulted any more.** It used to be, and the result was
-     * a switch that appeared to do nothing: with 仅幻灯片 set and no slideshow running, the
-     * viewer's 图评 menu would show 二维码 开 while the code drew nothing, because this gate
-     * had already refused to register the photo. A menu whose rows silently do nothing is
-     * worse than one with no rows.
-     *
-     * So the mode decides exactly one thing now — whether a *slideshow* registers each photo
-     * as it advances, which is what slows a long rotation down — and the display is governed
-     * by the 图评 menu's own switches. [ReviewMode.OFF] is still honoured: it is the one value
-     * that means "stop talking to the server at all".
+     * Three answers, and the ordinary one is [ReviewDecision.LOOKUP]: ask the server whether
+     * it already knows this picture, and draw whatever comes back. **Only a show whose own
+     * 图评 switch is on registers a photo by itself** (docs/tuping-design.md §17.28), so on a
+     * fresh install nothing is uploaded until somebody presses 图评 on a photo they want
+     * comments on.
      */
-    fun reviewWantedFor(isVideo: Boolean): Boolean {
-        if (isVideo) return false
+    fun reviewDecisionFor(
+        isVideo: Boolean,
+        screenSaver: Boolean = false,
+        slideshow: Boolean = false,
+    ): ReviewDecision {
         val review = container.reviewSettings
-        if (review.mode == ReviewMode.OFF) return false
-        return review.serverUrl.isNotBlank()
+        return reviewDecision(
+            isVideo = isVideo,
+            mode = review.mode,
+            serverUrl = review.serverUrl,
+            danmakuLevel = review.danmakuLevel,
+            screenSaver = screenSaver,
+            slideshow = slideshow,
+            slideshowEnabled = review.slideshowEnabled,
+        )
     }
-
-    /**
-     * Whether a *slideshow* should register the photo it is moving to.
-     *
-     * The mode's real job. 仅幻灯片 leaves photos the user opens by hand free to register —
-     * that is what makes the 图评 menu work while browsing — but during a rotation the mode
-     * and the slideshow switch between them decide whether every frame is worth an upload.
-     */
-    fun slideshowRegistersReview(): Boolean =
-        container.reviewSettings.mode != ReviewMode.OFF &&
-            container.reviewSettings.slideshowEnabled
 
     /**
      * Hands the viewer's current photo to the review layer, or hides it.
      *
-     * `slideshowRunning` is no longer a parameter: the gate that used it is gone, and what
-     * bounds the uploads is the viewer's prefetch — which only ever registers ahead while a
-     * slideshow is actually running — plus the 图评 menu's own switches. A registration is
-     * one small thumbnail over the LAN, and the alternative was the silent no-op described
-     * on [reviewWantedFor].
+     * [decision] is passed in rather than recomputed, and that is not tidiness: the viewer
+     * keys its effect on it, so a value that changes when a switch does is what makes a
+     * switch take effect on the photo *on screen* rather than only on the next one.
+     * Recomputing it here from the settings would answer the same but leave the effect
+     * blind to the change.
      */
-    fun openReviewedPhoto(item: MediaItem?, source: String) {
-        val wanted = reviewWantedFor(isVideo = item?.isVideo ?: true)
+    fun openReviewedPhoto(
+        item: MediaItem?,
+        source: String,
+        decision: ReviewDecision,
+        screenSaver: Boolean = false,
+        slideshow: Boolean = false,
+    ) {
         container.review.openPhoto(
             item = item,
             source = source,
-            wanted = wanted,
+            decision = decision,
             danmakuLevel = container.reviewSettings.danmakuLevel,
+            screenSaver = screenSaver,
+            slideshow = slideshow,
+        )
+    }
+
+    /**
+     * The explicit act: put *this* photo on the 图评 server so guests can comment on it.
+     *
+     * Bound to the viewer's 图评 row (docs/tuping-design.md §17.28). It is the only path in
+     * the app that uploads a thumbnail outside a show that carries 图评, which is what makes
+     * "no photo reaches the server until somebody asks" true rather than aspirational.
+     */
+    fun armReviewedPhoto(
+        item: MediaItem?,
+        source: String,
+        screenSaver: Boolean = false,
+        slideshow: Boolean = false,
+    ) {
+        container.review.armPhoto(
+            item = item,
+            source = source,
+            danmakuLevel = container.reviewSettings.danmakuLevel,
+            screenSaver = screenSaver,
+            slideshow = slideshow,
         )
     }
 
@@ -1293,24 +1292,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         container.review.refreshCommentsForCurrentPhoto()
     }
 
-    /** Registers the photos the viewer is about to show, like the image prefetcher does. */
-    fun preRegisterReviewedPhotos(candidates: List<ReviewCandidate>, source: String) {
-        if (container.reviewSettings.serverUrl.isBlank()) return
+    /**
+     * Registers the photos the viewer is about to show, like the image prefetcher does.
+     *
+     * **Only a show that carries 图评 may do this** (docs/tuping-design.md §17.28). It is the
+     * one path by which a photo nobody pressed anything on reaches the server, and it exists
+     * for the party rotation: the host decided once, in 幻灯片 settings, that the whole show
+     * is commentable, and nobody is holding the remote. With that switch at its default 关,
+     * this method is a no-op for every caller.
+     */
+    fun preRegisterReviewedPhotos(
+        candidates: List<ReviewCandidate>,
+        source: String,
+        slideshow: Boolean = false,
+    ) {
+        if (!slideshow || !container.reviewSettings.slideshowEnabled) return
+        if (reviewDecisionFor(isVideo = false, screenSaver = false, slideshow = true) !=
+            ReviewDecision.REGISTER
+        ) {
+            return
+        }
         container.review.preRegister(candidates, source)
     }
-
-    /**
-     * True when 图评 applies to every full-screen photo rather than only during a show.
-     *
-     * The viewer uses it to decide whether pre-registering is worth doing at all: with the
-     * setting on 仅幻灯片 and no show running, there is nothing to pre-register *for*. The
-     * photo on screen still registers either way — that is what makes the 图评 menu work
-     * while browsing — but fetching the codes for the next four as well is only worth it
-     * when there is a show to fetch them for.
-     */
-    val isReviewOnForEveryPhoto: Boolean
-        get() = container.reviewSettings.mode == ReviewMode.ALL &&
-            container.reviewSettings.serverUrl.isNotBlank()
 
     /** Reads a still's bytes from the cache Coil already filled; null when it is not there. */
     suspend fun thumbnailBytesFor(url: String): ByteArray? = container.review.thumbnailBytesFor(url)

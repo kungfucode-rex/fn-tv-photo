@@ -213,3 +213,12 @@
     两张截图：`artifacts/screenshots/m1-noserver-band.jpg`（没有那个按钮）、`m3-server-band.jpg`（有）；模拟器上放视频时角上也读不到 `扫码评论`（`VID_20261005_08.mp4`，`3 / 15`），而那一行的 `图评` 开关**照样在** —— `isVideo = false` 那一处就是这么来的。
 
     **没在设备上量的**：把光标从 4 格那版走到头（没有服务器时 left/right 在四格之间绕回）—— 走的是和五格版同一个 `settingRows` 取模，而五格版量到了：从 播放 按右键四下，光标落在 **图评 关** 上（截图 `artifacts/screenshots/m5-focus-review-switch.jpg`）。
+
+31. **发出去的 0.1.3 二进制会不会做 1.5.8 依赖的那两件事** —— 单测只说明源码是对的，release 附件里那个二进制是不是同一个东西是另一件事，而这一版 app 的"重开一张已经开过的照片"整条路径都压在 `by-local` 上。所以 tag `server-v0.1.3` 的 CI 跑完（`go vet` + `go test` 在同一个 commit 上过、镜像推上 Docker Hub、release 附件六个）之后，把一个 **0.1.3 的 `tupingd-linux-amd64`** 拿到 WSL 里跑起来量了一遍：
+
+    - **版本注入是对的**：`./tupingd -version` → `0.1.3`；监听那一行 `version=0.1.3`；`/healthz` → `{"baseUrl":"","baseUrlSource":"the address each caller used","ok":true,"thumbBytes":0,"tls":false,"uptimeSec":0,"version":"0.1.3"}`。
+    - **`by-local` 认得登记过的那张**：注册一张（`code=WxQJsA`）之后，同一个设备用 `source=fnos&localId=wsl%3A1002` 问回来 → **200**，`imageId` 与注册时**一模一样**（`01M4TXEP4YE7SX4VQY06PZG5PY`），`thumbUrl`/`qrUrl` 都在。
+    - **不认得的是 404，而且分得清是谁**：没登记过的 `localId` → **404** `{"error":{"code":"not_found","message":"这台设备还没给这张照片开过图评"}}`；**另一台设备**问同一个 `localId` 也是 404（`device_local` 按设备隔离）；没有设备令牌 → **401**；只给 `source` 不给 `localId` → **400**。
+    - **查询确实什么都没建**：这一串问题前后 `/healthz` 的 `thumbBytes` 是 **10564 → 10564**。这是"只读"这个词唯一能测的形状。
+    - **重绑真的把码搬家了**：同一个短码的二维码响应头在重绑前是 `X-Page-Url: http://photos.example.com/c/WxQJsA`，`POST /v1/admin/codes/rebind {"baseUrl":"http://photos.example.com:8443"}` 之后是 **`http://photos.example.com:8443/c/WxQJsA`** —— 短码一个字没变，`GET /v1/photos/<短码>` 照样 200。回答里那句给操作员的话也在（`在电视上重启一次 App…`）。私网地址那一次多回一句 `warning: 这个地址只有同一网络里的手机能打开…`；不带管理员令牌 → **401**。
+    - **一处诚实的缺口**：上面跑的是**本机用 `tools/tuping.ps1 -Tasks dist -Version 0.1.3` 从同一个 commit 构建**的 Linux 二进制，不是 release 附件里那一个 —— 从这个网络下载那个附件只有约 18 KB/s（15 MB 的文件五分钟只下来 5.5 MB），上一版（0.1.2）当天下载得动，这次不行。补上的证据是 CI 自己那道门：同一个 tag 的 workflow 在**同一个 commit** 上跑过 `go vet ./...` 与 `go test ./... -count=1` 才构建的镜像和附件。附件本身没能逐字节验。

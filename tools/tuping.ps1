@@ -36,7 +36,7 @@ param(
   # Output directory for cross-built binaries.
   [string]$Dist = 'dist',
 
-  [string]$Version = '0.1.2',
+  [string]$Version = '0.1.3',
 
   # Listening address for -Tasks run.
   [string]$Addr = '0.0.0.0:8080',

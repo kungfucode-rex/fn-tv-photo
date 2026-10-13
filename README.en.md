@@ -257,7 +257,7 @@ In fnOS **Docker → Compose → New project**: name it `tuping`, paste the bloc
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.2"
+    image: "kungfucode/tuping:0.1.3"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -275,7 +275,7 @@ thumbnails and the signing key land; `container_name` makes the container `tupin
 
 > **Every line here is short and every value quoted, on purpose**: some tools reflow long lines
 > when copying from a rendered page, and break on `:` and `-` inside **unquoted** values —
-> `kungfucode/tuping:0.1.2` becomes two lines and `unless-stopped` becomes `unless-` +
+> `kungfucode/tuping:0.1.3` becomes two lines and `unless-stopped` becomes `unless-` +
 > `stopped`, and the whole block fails to parse. Quoted values are never split, hence the quotes.
 > If you would rather not risk it, do not paste: copy
 > [`server/docker-compose.image.yml`](server/docker-compose.image.yml) into a directory with a
@@ -285,7 +285,7 @@ Without Compose, the equivalent one-liner:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your-token' kungfucode/tuping:0.1.2
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='your-token' kungfucode/tuping:0.1.3
 ```
 
 | Variable | What to put in it |
@@ -306,7 +306,7 @@ connecting" — the address in a code is the one the TV reported when it registe
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **Ask the service**: `curl http://<NAS address>:8080/healthz` → `{"ok":true,"version":"0.1.2",...}`.
+2. **Ask the service**: `curl http://<NAS address>:8080/healthz` → `{"ok":true,"version":"0.1.3",...}`.
 3. **Open the admin page**: `http://<NAS address>:8080/admin` on a phone, sign in with the token
    from step 2, and see the review queue.
 
@@ -323,7 +323,7 @@ write a comment → the comment drifts across the TV.
 | The container restarts in a loop, log says `unable to open database file` | The data directory's owner does not match the container's uid. The image handles this itself; only a mount on SMB/CIFS, which cannot `chown`, needs `user: "0:0"` added to the service. |
 | It will not start, `port is already allocated` | Something else holds 8080: change the left-hand side of `"8080:8080"` (to `"8090:8080"`), and carry that port in the TV and phone addresses too. |
 | The QR code scans but will not open | The address inside a code is the one the TV reported: first confirm on the TV that a phone can open that address (same LAN, right port), then register the photo again on the TV. |
-| HTTPS configured, but http still works and https does not connect | Check two things in order: ① run `/usr/local/bin/tupingd -check` in the container — **no `tls` line at all** means this binary knows nothing about TLS (0.1.1 and later do), so move the image tag to 0.1.2 or build it yourself; ② a `tls` line that is still `off` means the environment variables never reached the container — after editing the compose file you must press **"start / redeploy"**, pressing only "restart" is not enough. |
+| HTTPS configured, but http still works and https does not connect | Check two things in order: ① run `/usr/local/bin/tupingd -check` in the container — **no `tls` line at all** means this binary knows nothing about TLS (0.1.1 and later do), so move the image tag to 0.1.3 or build it yourself; ② a `tls` line that is still `off` means the environment variables never reached the container — after editing the compose file you must press **"start / redeploy"**, pressing only "restart" is not enough. |
 | The container stays unhealthy after enabling HTTPS | The old compose file's health check was `wget http://127.0.0.1:8080/healthz`, which cannot work under TLS — the service is fine. Replace it with the binary's own probe: `test: ["CMD", "/usr/local/bin/tupingd", "-health"]`. |
 | The page says 发得太快了，歇一会儿 (HTTP 429) | **Rate limiting working, not a fault.** Wait a minute, or change photo; the full table and its reasoning are in [`docs/tuping-design.md`](docs/tuping-design.md) §7. |
 | Scanning on the TV says 这张照片不在图评里 | The code on the TV was issued by a **previous** server (reinstalled, or a different `data/` directory). 1.4.11 onwards gets out of this by itself; earlier builds need a restart. Do not swap the `data/` directory if you want to keep the comments. |

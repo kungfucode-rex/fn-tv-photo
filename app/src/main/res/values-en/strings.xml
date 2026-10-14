@@ -250,7 +250,7 @@
          feature's name: somebody standing in front of a photo wants guests to comment on it,
          and "photo review" is what this repository calls the machinery. -->
     <string name="viewer_action_scan">Scan to comment</string>
-    <string name="viewer_scan_opened">Comments are on — guests can scan this code</string>
+    <string name="viewer_scan_opened">Scan the code to leave a comment</string>
     <string name="settings_review_slideshow_on">Photo review</string>
 
     <!-- The two words a switch shows. Not Yes/No: these rows turn a *layer* on and off

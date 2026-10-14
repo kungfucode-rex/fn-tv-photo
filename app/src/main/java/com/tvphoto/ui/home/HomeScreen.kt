@@ -224,6 +224,10 @@ private fun NavItem(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
+                // The label takes the room and the dot is pushed to the far end of the
+                // button, so the two sit at the row's two edges rather than the dot
+                // crowding the word it belongs to.
+                modifier = Modifier.weight(1f),
             )
             if (badge) UpdateDot()
         }
@@ -238,12 +242,17 @@ private fun NavItem(
  * there is no notification and no badge on a launcher icon, so a release nobody is told
  * about is a release nobody installs. It carries no text on purpose — it is read from
  * across a room, where one dot is legible and "1.4.12" is not.
+ *
+ * Six density-independent pixels, and it started at ten: at this size the dot still reads
+ * from the sofa, and a mark that is not a target does not deserve a target's footprint
+ * inside a button whose whole surface is the target. Its position is the row's, not this
+ * composable's — see [NavItem], which gives the label the room and this the far edge.
  */
 @Composable
 private fun UpdateDot() {
     Box(
         modifier = Modifier
-            .size(10.dp)
+            .size(6.dp)
             .clip(CircleShape)
             .background(UpdateDotColor),
     )

@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.5.8"
+val appVersionName = "1.5.9"
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -307,7 +307,26 @@ android {
         // 图评 wants the 0.1.3 server for that lookup path: against an older one a photo reads
         // as "not on the server" until 扫码评论 is pressed again, because a 404 is exactly what
         // "nobody has opened 图评 on it" means.
-        versionCode = 34
+        // 35 is 1.5.9, which is 34 with the number moved for the usual reason — a television's
+        // installer refuses to lay a build over another with the same versionCode — and two
+        // things somebody asked for while looking at the screen the day after 1.5.8 shipped.
+        //
+        // The toast behind 扫码评论 said "已开图评，让客人扫这张码", which reports what the
+        // machine just did to the person holding the remote. It now says "扫码即可加评论",
+        // which is the one thing the guest on the other side of the room has to do. The
+        // sentence is what stands in for a code that did not appear — the failure reason
+        // itself is on 设置 → 图评连接状态 (§17.29) — so it is read by whoever is wondering
+        // why there is nothing to scan, and it now answers that instead of narrating.
+        //
+        // The red dot that says a newer build exists was 10 dp and sat immediately after the
+        // word 设置. It is now 6 dp and sits at the far edge of the 设置 button, with the
+        // label holding the room in between. Two reasons, and the second is the one that
+        // decided the size: at six it still reads from a sofa across the room, and a mark
+        // that is not itself a target should not take a target's footprint inside a button
+        // whose whole surface is one. Nothing else on the rail moved — the other five items
+        // have nothing after their label, so handing the label the remaining width draws
+        // exactly what it drew before.
+        versionCode = 35
         versionName = appVersionName
 
         // How long the app may sit untouched before the 屏保相册 starts playing. The release

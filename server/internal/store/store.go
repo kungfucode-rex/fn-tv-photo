@@ -253,6 +253,13 @@ func (s *Store) migrate(ctx context.Context) error {
 		// which falls back to the pinned TUPING_BASE_URL and then to the address of the
 		// request being answered (§17.20).
 		`ALTER TABLE codes ADD COLUMN base_url TEXT NOT NULL DEFAULT ''`,
+		// Which device minted this code, so that "we have moved" can be answered by the
+		// television that owns the photo instead of by an operator with a shell (§17.31).
+		//
+		// Empty means "minted before this column existed" — every code on every deployment
+		// that predates 0.1.4 — and those are claimed by the first device that registers the
+		// photo again; `followAddress` has the rule and the three reasons it is narrow.
+		`ALTER TABLE codes ADD COLUMN device_id TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			return fmt.Errorf("store: migrate %q: %w", stmt, err)

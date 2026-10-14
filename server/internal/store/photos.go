@@ -76,6 +76,12 @@ type RegisterInput struct {
 	// It is recorded per code rather than per device because that is what a QR code is: a
 	// link somebody else's phone will open. See the note on the `codes.base_url` migration.
 	BaseURL string
+
+	// AddressPinned says the deployment has a `TUPING_BASE_URL` of its own, which is the
+	// operator stating where phones should go. A pinned deployment never follows a device's
+	// own report, because the pin exists for the deployment whose device reports cannot be
+	// believed — the one behind a proxy that rewrites Host. See `followAddress`.
+	AddressPinned bool
 }
 
 // RegisterResult is what the album needs back.
@@ -168,7 +174,7 @@ func (s *Store) Register(ctx context.Context, in RegisterInput) (*RegisterResult
 		}
 	}
 
-	code, codeBase, err := s.ensureCode(ctx, photoID, in.Scope, in.ScopeID, now, in.BaseURL)
+	code, codeBase, err := s.ensureCode(ctx, photoID, in.Scope, in.ScopeID, now, in.BaseURL, in.DeviceID, in.AddressPinned)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +572,7 @@ func (s *Store) recentDevicePhoto(ctx context.Context, in RegisterInput, now int
 		}
 	}
 
-	code, codeBase, err := s.ensureCode(ctx, photo.ID, in.Scope, in.ScopeID, now, in.BaseURL)
+	code, codeBase, err := s.ensureCode(ctx, photo.ID, in.Scope, in.ScopeID, now, in.BaseURL, in.DeviceID, in.AddressPinned)
 	if err != nil {
 		return nil, "", "", "", false, err
 	}
@@ -622,30 +628,31 @@ func (s *Store) rememberDevicePhoto(
 // just supplied. Returning the input instead is how a reply ends up advertising URLs for a
 // host the code does not live on.
 //
-// [baseURL] only applies to a code being minted. An existing code keeps the address it was
-// created with, and that is deliberate: a guest may already be holding a printed or
-// screenshotted link, and silently re-pointing it because somebody registered the same
-// photo from a different network would break the one thing a link has to be, which is
-// stable. To move a deployment to a new address, delete and re-register the photos.
-func (s *Store) ensureCode(ctx context.Context, imageID string, scope Scope, scopeID string, now int64, baseURL string) (string, string, error) {
-	var code, existing string
+// **A code's address used to be frozen at mint time**, and the rule was "to move a
+// deployment, delete and re-register the photos". That rule made the deployment's own move
+// unfixable from the only device that knows about it: a household that changed its tunnel
+// address had to run `POST /v1/admin/codes/rebind` from a shell, or nothing on the
+// television ever changed (docs/tuping-design.md §17.31 — the measurement and the report
+// that forced this are both there). [followAddress] is the narrow exception.
+func (s *Store) ensureCode(ctx context.Context, imageID string, scope Scope, scopeID string, now int64, baseURL, deviceID string, pinned bool) (string, string, error) {
+	var code, existing, mintedBy string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT code, base_url FROM codes WHERE image_id=? AND scope_type=? AND COALESCE(scope_id,'')=? LIMIT 1`,
-		imageID, int(scope), scopeID).Scan(&code, &existing)
+		`SELECT code, base_url, device_id FROM codes WHERE image_id=? AND scope_type=? AND COALESCE(scope_id,'')=? LIMIT 1`,
+		imageID, int(scope), scopeID).Scan(&code, &existing, &mintedBy)
 	if err == nil {
-		return code, existing, nil
+		return s.followAddress(ctx, code, existing, mintedBy, baseURL, deviceID, pinned)
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return "", "", fmt.Errorf("store: find code: %w", err)
 	}
 
-	// Collisions are ~1 in 5×10^10 per attempt, but "practically never" is not
+	// Collisions are ~1 in 5.5×10^10 per attempt, but "practically never" is not
 	// never: retry a few times and then give up honestly.
 	for attempt := 0; attempt < 8; attempt++ {
 		code = NewCode()
 		_, err := s.db.ExecContext(ctx,
-			`INSERT INTO codes (code, image_id, scope_type, scope_id, created_at, base_url) VALUES (?,?,?,?,?,?)`,
-			code, imageID, int(scope), nullableString(scopeID), now, baseURL)
+			`INSERT INTO codes (code, image_id, scope_type, scope_id, created_at, base_url, device_id) VALUES (?,?,?,?,?,?,?)`,
+			code, imageID, int(scope), nullableString(scopeID), now, baseURL, deviceID)
 		if err == nil {
 			return code, baseURL, nil
 		}
@@ -654,6 +661,62 @@ func (s *Store) ensureCode(ctx context.Context, imageID string, scope Scope, sco
 		}
 	}
 	return "", "", errors.New("store: could not allocate a unique code")
+}
+
+// followAddress decides whether the address already written on a code moves, and returns
+// the code and the address to build this reply from.
+//
+// The invariant this has to protect is real, and it is why the address was frozen in the
+// first place: **a guest may be holding a printed or screenshotted link**, and two
+// televisions that hold the same photo — the layered fingerprint merges them on purpose —
+// must not flip one code's address back and forth between their two networks. So the move
+// is narrow:
+//
+//   - **Only the device that minted the code may move it.** Another television registering
+//     the same photo leaves the address alone.
+//   - **A code with no owner recorded is claimed by the first device that registers it
+//     again.** Every code that exists on every deployment predating this column has no
+//     owner, and without this the whole feature would only ever work for photos registered
+//     after the upgrade — which is not the deployment that has the problem.
+//   - **A device that reports no address never moves anything.** Older clients report
+//     nothing, and `""` means "no evidence", not "clear it": the pinned `TUPING_BASE_URL`
+//     and then the caller's own address stay in the fallback chain (§17.20).
+//   - **A deployment that pins `TUPING_BASE_URL` never follows a device at all**
+//     ([RegisterInput.AddressPinned]). The pin *is* the operator saying that the device's own
+//     report cannot be trusted — that is what it is for, the deployment behind a proxy that
+//     rewrites Host — and following the device anyway would overwrite the address phones
+//     were given on purpose.
+//   - **A code an operator has re-bound belongs to the deployment, not to a device**
+//     ([CodeOwnerOperator], written by [RebindCodes]). Otherwise the next press of 扫码评论 on
+//     a television sitting on the LAN would undo the very act that gave the phones a public
+//     address, and the two would take turns.
+//
+// Claiming happens even when the address is unchanged, so that a code adopted by its owner
+// at today's address cannot be moved by somebody else tomorrow.
+func (s *Store) followAddress(ctx context.Context, code, existing, mintedBy, baseURL, deviceID string, pinned bool) (string, string, error) {
+	if deviceID == "" || baseURL == "" || pinned {
+		return code, existing, nil
+	}
+	if mintedBy == CodeOwnerOperator {
+		return code, existing, nil
+	}
+	if mintedBy != "" && mintedBy != deviceID {
+		return code, existing, nil
+	}
+	if existing == baseURL {
+		if mintedBy == deviceID {
+			return code, existing, nil
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE codes SET device_id=? WHERE code=?`, deviceID, code); err != nil {
+			return "", "", fmt.Errorf("store: claim code: %w", err)
+		}
+		return code, existing, nil
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE codes SET base_url=?, device_id=? WHERE code=?`, baseURL, deviceID, code); err != nil {
+		return "", "", fmt.Errorf("store: follow device address: %w", err)
+	}
+	return code, baseURL, nil
 }
 
 // DevicePhoto answers the one question the album end asks before it decides to upload
@@ -719,12 +782,19 @@ func (s *Store) DevicePhoto(ctx context.Context, deviceID, source, localID strin
 // Nothing else moves. Comments hang off `photos.id`, not off the code, so every thread
 // survives a rebind — and the code itself survives too, which is what keeps `/c/<code>`
 // links, the H5 page's own history entries and the television's cached identity valid.
+//
+// One more thing moves with the address: **the code stops belonging to a device**
+// ([CodeOwnerOperator]). The operator has just said where phones should go, and the
+// television that minted this code must not be able to undo that the next time somebody
+// presses 扫码评论 on it — see `followAddress`, which is the automatic half of the same
+// question.
 func (s *Store) RebindCodes(ctx context.Context, baseURL string) (updated, total int64, err error) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM codes`).Scan(&total); err != nil {
 		return 0, 0, fmt.Errorf("store: count codes: %w", err)
 	}
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE codes SET base_url = ? WHERE base_url <> ?`, baseURL, baseURL)
+		`UPDATE codes SET base_url = ?, device_id = ? WHERE base_url <> ?`,
+		baseURL, CodeOwnerOperator, baseURL)
 	if err != nil {
 		return 0, 0, fmt.Errorf("store: rebind codes: %w", err)
 	}

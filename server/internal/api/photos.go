@@ -194,6 +194,10 @@ func (s *Server) handlePhotoRegister(w http.ResponseWriter, r *http.Request) {
 		Visibility:     store.VisibilityImage,
 		FreshnessDays:  defaultFreshnessDays,
 		BaseURL:        normalizeBaseURL(meta.BaseURL),
+		// The pin, if there is one, is handed down so the store can refuse to follow a
+		// device's own report on a deployment whose operator has stated where phones go
+		// (docs/tuping-design.md §17.31).
+		AddressPinned: s.cfg.BaseURL != "",
 	})
 	if err != nil {
 		s.serverError(w, err)

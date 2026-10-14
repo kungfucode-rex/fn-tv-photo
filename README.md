@@ -142,7 +142,7 @@ adb install -r FN-tvphoto-1.5.6.apk
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.3"
+    image: "kungfucode/tuping:0.1.4"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -158,7 +158,7 @@ services:
 `docker exec tuping …` 用的是这个名字）。
 
 > **这段每行都很短、每个值都带引号，是有意的**：从渲染过的页面复制时，有些工具会按窗口宽度重排长行，
-> 而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.3` 会变成两行、
+> 而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.4` 会变成两行、
 > `unless-stopped` 会变成 `unless-` + `stopped`，整段就解析失败。引号里的内容不会被拆，所以值一律加引号。
 > 不想冒这个险就别粘：用文件管理把 [`server/docker-compose.image.yml`](server/docker-compose.image.yml)
 > 传进一个目录、在面板里按**路径**建项目，或者直接用下面那条命令。
@@ -167,7 +167,7 @@ services:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.3
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.4
 ```
 
 | 变量 | 填什么 |
@@ -186,7 +186,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
    level=INFO msg="tupingd listening" addr=[::]:8080 ... db=/data/tuping.db
    ```
 
-2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.3",...}`。
+2. **问服务**：`curl http://<NAS 地址>:8080/healthz` → `{"ok":true,"version":"0.1.4",...}`。
 3. **进管理页**：手机打开 `http://<NAS 地址>:8080/admin`，用第 2 步那个口令登录，能看到审核队列就好。
 
 然后电视：**设置 → 图评设置 → 图评服务器**填**同一个地址**（`http://192.168.31.14:8080` 这种，手机也得能打开它），预览一张照片 → 按 ↑ → **扫码评论**（二维码出现）→ 手机扫码写评论 → 电视上弹幕飘过。
@@ -199,7 +199,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 | 容器反复重启，日志 `unable to open database file` | 数据目录的属主和容器里的 uid 对不上。镜像自己会处理，只有挂载在 SMB/CIFS 这类不支持 `chown` 的地方，才需要给服务加一行 `user: "0:0"`。 |
 | 起不来，`port is already allocated` | 8080 被别的容器占了：把 `"8080:8080"` 左边改掉（例如 `"8090:8080"`），电视和手机上用的地址也要跟着带端口。 |
 | 二维码扫了打不开 | 二维码里的地址是电视上报的：先在电视上确认那行地址**手机也能打开**，然后在电视上重新注册这张照片。 |
-| 配了 HTTPS，但 http 照常、https 连不上 | 按顺序查两件事：① 在容器里跑 `/usr/local/bin/tupingd -check`，**输出里根本没有 `tls` 那一行** = 这个二进制不认识 TLS（0.1.1 起才有），把镜像 tag 换成 0.1.3 或自己构建；② 有 `tls` 却仍是 `off` = 环境变量没进容器：改完 compose 必须点**「启动 / 重新部署」**，只点「重启」不算。 |
+| 配了 HTTPS，但 http 照常、https 连不上 | 按顺序查两件事：① 在容器里跑 `/usr/local/bin/tupingd -check`，**输出里根本没有 `tls` 那一行** = 这个二进制不认识 TLS（0.1.1 起才有），把镜像 tag 换成 0.1.4 或自己构建；② 有 `tls` 却仍是 `off` = 环境变量没进容器：改完 compose 必须点**「启动 / 重新部署」**，只点「重启」不算。 |
 | 配了 HTTPS 之后容器一直 unhealthy | 旧 compose 里那句健康检查是 `wget http://127.0.0.1:8080/healthz`，TLS 下必然失败 —— 服务没坏。换成二进制自己的探针：`test: ["CMD", "/usr/local/bin/tupingd", "-health"]`。 |
 | 页面上写「发得太快了，歇一会儿」（HTTP 429） | **限流生效了，不是故障。** 等一分钟、或换一张照片就恢复；全表与理由在 [`docs/tuping-design.md`](docs/tuping-design.md) §7。 |
 | 电视上扫码提示「这张照片不在图评里」 | 电视上那张码是**上一台服务器**签发的（服务端重装、换了 `data/` 目录之后）。1.4.11 起应用会自己走出来；更早的版本重启一次应用即可。想让评论不丢就不要换 `data/` 目录。 |

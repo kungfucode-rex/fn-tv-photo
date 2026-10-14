@@ -104,6 +104,22 @@ const CodeLength = 6
 // pair that a person reading one off a TV could confuse for another.
 const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
+// CodeOwnerOperator is the `codes.device_id` recorded when an operator re-binds codes with
+// `POST /v1/admin/codes/rebind`: the address on those codes is the deployment's, and no
+// device may move it afterwards.
+//
+// The three states of that column are all meaningful and all needed:
+//
+//	''            minted before the column existed — the first device to register the photo
+//	              again claims it and its address follows that device (see `followAddress`);
+//	'*'           an operator set this address with `rebind`; devices leave it alone;
+//	a device id   that device may move the address, and nobody else may.
+//
+// Without the middle state the two acts would take turns: a television on the LAN would
+// re-point an operator's public address back to the LAN every time somebody pressed
+// 扫码评论 (docs/tuping-design.md §17.31).
+const CodeOwnerOperator = "*"
+
 // NewCode returns a cryptographically random short code.
 //
 // Random, not sequential: the code is the only thing standing between a stranger

@@ -1151,14 +1151,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setReviewServerUrl(url: String) {
         val changed = url.trim() != container.reviewSettings.serverUrl
         container.reviewSettings.serverUrl = url
-        // A device token is issued *by* a server, so pointing the app at a different one
-        // leaves a credential the new server has never seen: `/healthz` answers, the status
-        // row says 已连接, and every photo upload is refused 设备令牌不对. `forgetDevice` is
-        // the remedy its own doc names for exactly this — and until now nothing called it.
+        // The answers belong to the address that gave them; the *identity* may still be good.
+        //
+        // Every photo, comment and QR picture this repository cached came from the old
+        // address and is dropped. The device id and its tokens are kept, and that is a
+        // reversal worth spelling out. Dropping them was the remedy for "the new server has
+        // never seen this token": `/healthz` answers, the row says 已连接, and every upload is
+        // refused 设备令牌不对 — which is still exactly what a *different* server does, and the
+        // repair path answers that 401 by forging a new identity ([DeviceRepair]). But a
+        // deployment that moved is usually the **same** server at a new address, where the
+        // token is valid and the television is already known; throwing the identity away
+        // there is what made the server unable to tell "this television, new address" from a
+        // stranger, and that distinction is the only thing by which a short code's address
+        // can follow its owner (`store.followAddress`, docs/tuping-design.md §17.31).
         //
         // Only when the address really changed: re-saving the same address is what somebody
-        // does when 图评 is not working, and that must not throw away a working identity.
-        if (changed) container.review.forgetDevice()
+        // does when 图评 is not working, and that must not throw away the codes on screen.
+        if (changed) container.review.onServerChanged()
         refreshReviewStatus()
     }
 

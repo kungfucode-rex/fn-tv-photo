@@ -24,7 +24,7 @@
 ```yaml
 services:
   tuping:
-    image: "kungfucode/tuping:0.1.3"
+    image: "kungfucode/tuping:0.1.4"
     container_name: "tuping"
     restart: "unless-stopped"
     ports:
@@ -42,7 +42,7 @@ services:
 里面）。
 
 > 这一段**每行都很短、每个值都带引号**，两件事都是有意的：从渲染过的网页复制时，有些工具会按窗口宽度
-> 重排长行，而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.3` 会变成两行、
+> 重排长行，而且在**未加引号**的值里按 `:` 和 `-` 断行 —— `kungfucode/tuping:0.1.4` 会变成两行、
 > `unless-stopped` 会变成 `unless-` + `stopped`，整段就解析失败（报错通常在 `expected <block end>` 附近）。
 > 引号里的内容不会被拆，所以值一律加引号。粘完还是扫一眼：如果某行被拆开了，把值接回冒号后面那一行即可。
 > 不想冒这个险就别粘 —— 用文件管理把 [`docker-compose.image.yml`](docker-compose.image.yml) 传进一个
@@ -52,7 +52,7 @@ services:
 
 ```sh
 docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
-  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.3
+  -v "$PWD/data:/data" -e TUPING_ADMIN_TOKEN='你的口令' kungfucode/tuping:0.1.4
 ```
 
 | 变量 | 填什么 |
@@ -68,7 +68,7 @@ docker run -d --name tuping --restart unless-stopped -p 8080:8080 \
 
 ```sh
 curl http://192.168.31.14:8080/healthz
-# {"baseUrl":"","baseUrlSource":"the address each caller used","ok":true,"version":"0.1.3","uptimeSec":3,"thumbBytes":0}
+# {"baseUrl":"","baseUrlSource":"the address each caller used","ok":true,"version":"0.1.4","uptimeSec":3,"thumbBytes":0}
 ```
 
 `baseUrl` 是空的，因为没钉地址——`baseUrlSource` 就是说明这件事的字段。钉过的话它会是
@@ -174,7 +174,7 @@ powershell -File tools/setup-go.ps1
 powershell -File tools/tuping.ps1 -Tasks build,test
 
 # 两个架构的发布二进制 + Dockerfile + 两份 compose + .dockerignore + 本文件，一起进 dist/
-powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.3
+powershell -File tools/tuping.ps1 -Tasks dist -Version 0.1.4
 
 # 在开发机上直接跑，不需要 Docker 也不需要 NAS
 powershell -File tools/tuping.ps1 -Tasks run -BaseUrl http://192.168.31.20:8080
@@ -226,8 +226,8 @@ powershell -File tools/tuping.ps1 -Tasks deploy -NasHost 192.168.31.14
 
 > **前提：跑着一个认识这两个变量的二进制。** 这个特性是 **0.1.1** 才有的：更早的镜像（包括
 > `kungfucode/tuping:0.1.0`）里没有这段代码，设了 `TUPING_TLS_CERT/KEY` 它**既不生效、也不报错**
-> —— 端口照旧说明文 http，手机用 https 连过去只会得到一个 400。上面那份 compose pin 的就是 0.1.3；
-> 如果你手上是更早的镜像，换成 0.1.3 或更新，要么走上面的**自己构建镜像**。
+> —— 端口照旧说明文 http，手机用 https 连过去只会得到一个 400。上面那份 compose pin 的就是 0.1.4；
+> 如果你手上是更早的镜像，换成 0.1.4 或更新，要么走上面的**自己构建镜像**。
 >
 > 两条命令就能确认正在跑的那个二进制认不认（第一条要能 SSH，第二条只要看面板日志）：
 >
@@ -348,11 +348,16 @@ curl -sD - -o /dev/null http://192.168.31.14:8080/v1/qr/<短码>.png | grep -i x
 地址来自第 3 档时，这个 PNG 的 `Cache-Control` 是 `private, no-store`（同一条短码在不同 Host 下内容不同，
 不能让共享缓存把它发给别人）；来自第 1、2 档时才是可缓存的。
 
-### 搬家之后：把短码重绑到新地址
+### 搬家之后：地址怎么跟着走
 
-短码上的地址是**注册那一刻冻结**的，重新注册同一张照片也**不会**换：服务端会把已有的短码连同它记录的地址一起
-还回来（`store.ensureCode`）。这是故意的——客人手上可能已经有一张截图或打印出来的码，背着他们改掉地址比一个
-打不开的地址更糟。所以"我们换穿透地址了"要有自己的入口：
+**0.1.4 起，普通的搬家不需要这条接口。** 短码上的地址会跟着**铸这张码的那台电视**走：同一台设备重新登记这张照片时，服务端把新地址记上去（`store.followAddress`）。四条边界，都是为了不把"客人手上那张印出去或截过图的码"弄坏：
+
+- 只有铸这张码的设备能改它（`codes.device_id`）。**没有主的码** —— 0.1.4 之前铸的每一张都是 —— 由第一个重新登记它的设备认领：没有这一条，这个功能就只对升级之后新登记的照片有效，而有问题的恰好是那些老码。
+- 没上报地址的设备什么都不改（0.1.5.2 之前的客户端）。
+- **部署自己钉了 `TUPING_BASE_URL` 时一律不跟随**：那正是操作员在说"设备自己报的地址不可信"（反代改写 Host 的部署），跟随它只会覆盖掉钉给手机看的那个地址。
+- 客户端要 **1.5.10** 才会触发：同一套库换了地址之后它认得出这张照片，所以在电视上按一次 **扫码评论** 就会把这张照片重新登记一次，码跟着换过来。
+
+**什么时候还需要这条接口**：整台部署搬到一个新地址、你想一次把所有码都指过去（不必逐张照片在电视上按一遍）；或者反过来 —— 你要这些码**从此不再被任何设备改动**（电视在局域网、客人从公网扫码），就用它把地址钉住：重绑过的码归部署所有，设备再也改不动它。
 
 ```sh
 curl -X POST -H "X-Admin-Token: <TUPING_ADMIN_TOKEN>" \
@@ -368,13 +373,9 @@ curl -X POST -H "X-Admin-Token: <TUPING_ADMIN_TOKEN>" \
 - 地址写在 JSON、表单或 `?baseUrl=` 里都行（`curl -d` 发 JSON 时带的是表单的 Content-Type，因此也认）。
   不是 http/https 的、带用户名密码的、或者太长的地址会被 400 拒绝，**且什么都不改**。填一个私网地址能成功，
   但回包里会带一条 `warning`——和启动日志、`/healthz` 同一条理由。
-- **电视上要重启一次 App。** 每张照片的二维码 PNG 在电视上是按短码缓存的一张图，重绑之后要等那张照片
-  **重新注册**时才会抓新的（注册回包里的 PNG 是当场重取的，见 `ReviewRepository.fetchQr`）。回包里的 `next`
-  写的就是这句话。
+- **电视上不用重启 App（1.5.10 起）**：把那张照片**重新打开一次**就够了 —— 打开一张照片时它会重取那张二维码 PNG，而图片的文件名带着内容哈希，所以新图一定会重画（见 `ReviewRepository.fetchQr`）。更早的客户端只在**登记**照片时重取，那就要重启一次 App。回包里的 `next` 写的就是这两句。
 
-为什么一次要重启而不是自动刷新：电视并不知道自己在用的那个公网地址换了——它连的还是同一个地址，除非有人
-在它上面改了设置；而一个能替每张短码改地址的客户端，就是一个能把每位客人指到别人主机上的客户端。这条接口
-要的就是**只有管理员能按**（`X-Admin-Token`，和审核接口同一道门）。
+为什么这条接口只要管理员能按：一个能替每张短码改地址的客户端，就是一个能把每位客人指到别人主机上的客户端。**自动跟随是有的**（上面那四条边界），但它只对"铸这张码的那台设备"生效，而且一旦你用这条接口钉过一次，那张码就归部署所有了 —— 两个动作不会轮流来。
 
 ---
 
@@ -457,4 +458,4 @@ internal/store/     SQLite、迁移、身份匹配、可逆合并
 internal/web/       H5 评论页 + 登录页 + 编辑页（go:embed 进同一个二进制）
 ```
 
-服务端与相册端在同一个仓库（设计 D6），所以协议一改，协议文档、TV 端、服务端和 mock 可以在一次提交里一起改。两边的版本号是**故意不对齐**的：APK 写在 `app/build.gradle.kts`，服务端由 `-ldflags -X` 注入，tag 用 `v1.5.8` / `server-v0.1.3` 区分。
+服务端与相册端在同一个仓库（设计 D6），所以协议一改，协议文档、TV 端、服务端和 mock 可以在一次提交里一起改。两边的版本号是**故意不对齐**的：APK 写在 `app/build.gradle.kts`，服务端由 `-ldflags -X` 注入，tag 用 `v1.5.10` / `server-v0.1.4` 区分。

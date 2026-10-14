@@ -1066,6 +1066,11 @@ async function serveQr(res, code, size) {
       'Content-Length': png.length,
       'Cache-Control': 'public, max-age=86400, immutable',
       'X-Content-Type-Options': 'nosniff',
+      // What the picture encodes, on the response — the real server's `X-Page-Url`, and the
+      // only way the TV can tell that a code opens somewhere other than the server it is
+      // configured for. Same string that went into the QR above, by construction, which is
+      // the point: a header that disagreed with the picture would be worse than none.
+      'X-Page-Url': `${baseUrl()}/c/${code}`,
     });
     return res.end(png);
   } catch (error) {

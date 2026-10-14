@@ -188,13 +188,16 @@ class ReviewClient(
     }
 
     /**
-     * Fetches the QR PNG for a code.
+     * Fetches the QR PNG for a code, and the address the picture encodes with it.
      *
-     * The server renders it, so the TV never needs a QR library — and that also means
-     * the code the picture encodes is built from the server's configured base URL rather
-     * than from whatever host the TV happens to be talking to (docs/tuping-design.md §6.1).
+     * The server renders the picture, so the TV never needs a QR library — and the address
+     * inside it is the one recorded on the *short code* when it was minted, which is not
+     * necessarily the address this client is talking to (docs/tuping-design.md §6.1,
+     * §17.31). That difference is invisible in a PNG, which is why the server puts it on
+     * the response as `X-Page-Url` and why [QrImage] carries it back: it is the only way
+     * the app can notice that the code in front of the guest opens somewhere else.
      */
-    suspend fun qrPng(code: String, size: Int = QR_SIZE): Result<ByteArray> = call {
+    suspend fun qrPng(code: String, size: Int = QR_SIZE): Result<QrImage> = call {
         val url = base!!.newBuilder()
             .addPathSegments("v1/qr/$code.png")
             .addQueryParameter("size", size.toString())
@@ -206,7 +209,7 @@ class ReviewClient(
             val bytes = result.body?.bytes() ?: return@use Result.failure(
                 ReviewException(ReviewError.Unreachable("empty QR response")),
             )
-            Result.success(bytes)
+            Result.success(QrImage(png = bytes, pageUrl = result.header("X-Page-Url")))
         }
     }
 
@@ -479,6 +482,17 @@ class ReviewClient(
         }
     }
 }
+
+/**
+ * One QR picture and the address it encodes.
+ *
+ * [pageUrl] is the server's own `X-Page-Url`, or null on a server that does not send it.
+ * See [qrPointsElsewhere] for what the app does with it.
+ */
+data class QrImage(
+    val png: ByteArray,
+    val pageUrl: String?,
+)
 
 /** What `POST /v1/devices` answers with. */
 data class DeviceCredentials(

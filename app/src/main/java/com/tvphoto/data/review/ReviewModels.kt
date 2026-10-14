@@ -154,7 +154,21 @@ sealed interface ReviewStatus {
 
     data class Registering(val server: String) : ReviewStatus
 
-    data class Online(val server: String, val lastAt: Long) : ReviewStatus
+    /**
+     * The server answers and accepts this television.
+     *
+     * [qrPointsAt] is the `host:port` the last QR picture opened, and it is set only when
+     * that is *not* the server in [server] — see [qrPointsElsewhere]. It rides on the
+     * status rather than on the picture because the picture cannot explain itself: the
+     * guest's phone goes to the address inside the code, and the person holding the remote
+     * is the only one who can be told that it is not the address they configured
+     * (docs/tuping-design.md §17.31).
+     */
+    data class Online(
+        val server: String,
+        val lastAt: Long,
+        val qrPointsAt: String? = null,
+    ) : ReviewStatus
 
     data class Failed(val server: String, val reason: String, val at: Long) : ReviewStatus
 
@@ -163,7 +177,14 @@ sealed interface ReviewStatus {
         Off -> "关（模式设为「关」）"
         NoServer -> "未设置服务器地址"
         is Registering -> "正在注册 $server"
-        is Online -> "已连接 $server"
+        // The second half is the sentence that was missing for a year: a code that opens a
+        // different address is not a fault the app can fix, and without this line the only
+        // way to find out was to scan it with a phone and watch where the browser went.
+        is Online -> if (qrPointsAt.isNullOrBlank()) {
+            "已连接 $server"
+        } else {
+            "已连接 $server · 二维码指向 $qrPointsAt"
+        }
         is Failed -> "连不上 $server · $reason"
     }
 }

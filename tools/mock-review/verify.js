@@ -1031,6 +1031,16 @@ if (dumpFlag >= 0) {
   const qrClampedPng = decodePng(qrClamped.body);
   expect(qrClamped.status === 200 && qrClampedPng && qrClampedPng.width >= 96,
     `a size below the floor is clamped up to 96 (${qrClampedPng && qrClampedPng.width}px)`);
+  // The address inside the picture, on the response. The TV reads this to tell "my code
+  // opens somewhere else" from "my code opens the server I am configured for", and a mock
+  // that omitted it would make that whole feature untestable here while the real server
+  // sent it (the Go server sets it in `handleQR`). Only the shape is asserted, not the
+  // exact host: against the real server the address is the one recorded on the code, which
+  // is the deployment's business, not this test's.
+  const encoded = qr.headers.get('x-page-url');
+  expect(typeof encoded === 'string' && /^https?:\/\//.test(encoded) && encoded.endsWith(`/c/${photoA.code}`),
+    `the QR response says which address the picture encodes (${encoded})`,
+    `X-Page-Url was ${encoded}`);
 
   // ---- 5. the signed thumbnail ----------------------------------------
   console.log('\n[5] the signed thumbnail URL is the only way to the bytes');

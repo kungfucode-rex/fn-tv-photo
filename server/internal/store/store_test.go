@@ -596,11 +596,79 @@ func TestDeviceRepeatRegistrationIsReused(t *testing.T) {
 	}
 }
 
+// TestCodeWithoutAnOwnerIsClaimedOnce: a code minted before `codes.device_id` existed has no
+// owner recorded, and the first device to register the photo again takes it.
+//
+// Without this half, "the code follows the television" would only work for photos registered
+// *after* the upgrade — and the deployment that has the problem is the one whose codes
+// already exist (docs/tuping-design.md §17.31). The claim is also what makes the rule safe
+// afterwards: once a code has an owner, no other television can move it.
+func TestCodeWithoutAnOwnerIsClaimedOnce(t *testing.T) {
+	st := newTestStore(t)
+	ctx := context.Background()
+	image := fingerprintOf(t, loadPhoto(t, "33"))
+
+	first, err := st.Register(ctx, RegisterInput{
+		DeviceID: "tv-old", Source: "fnos", LocalID: "1", Image: image,
+		BaseURL: "http://a.example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Every code on every deployment that predates the column looks like this: the address
+	// is recorded, the owner is not.
+	if _, err := st.db.ExecContext(ctx, `UPDATE codes SET device_id='' WHERE code=?`, first.Code); err != nil {
+		t.Fatal(err)
+	}
+
+	// Another device registers the same photo from another address — a re-installed app, or
+	// the same household after the television forgot its device id.
+	claimed, err := st.Register(ctx, RegisterInput{
+		DeviceID: "tv-new", Source: "fnos", LocalID: "1", Image: image,
+		BaseURL: "http://b.example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.Code != first.Code {
+		t.Errorf("code %q became %q; claiming must not mint a second code", first.Code, claimed.Code)
+	}
+	if claimed.BaseURL != "http://b.example.com" {
+		t.Errorf("BaseURL = %q, want the address that just registered it", claimed.BaseURL)
+	}
+
+	// And now it has an owner, so a third device cannot move it back.
+	other, err := st.Register(ctx, RegisterInput{
+		DeviceID: "tv-other", Source: "fnos", LocalID: "1", Image: image,
+		BaseURL: "http://c.example.com",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other.BaseURL != "http://b.example.com" {
+		t.Errorf("BaseURL = %q, want it left at http://b.example.com", other.BaseURL)
+	}
+}
+
 // TestShortCodesAreUniqueAndResolvable: the code is the only thing between a
 // stranger and a photo, so it has to be both unique and random (§12.1).
+//
+// **The draw count is 1000, and that number is the point.** Any uniqueness test over
+// random codes is a probabilistic assertion: two of them collide with probability
+// ≈ n²/2 · (Σp²)⁶, which for this alphabet is about 2.3×10⁻⁴ at n=5000 — a test that
+// fails in CI roughly once every 4400 runs and, when it does, says nothing about the
+// code. It did, on 2026-10-14: `generated a duplicate code after 4011 draws: "EdZuVD"`.
+// At n=1000 the same arithmetic gives ≈9×10⁻⁶, about one run in 110,000, which is a
+// failure budget rather than a coin flip.
+//
+// The guarantee that actually matters is not here anyway: `codes.code` is UNIQUE in the
+// schema and `ensureCode` re-draws on a collision (8 attempts), so a duplicate can never
+// reach a guest — this test is about the generator being random enough to make that
+// retry loop a formality.
 func TestShortCodesAreUniqueAndResolvable(t *testing.T) {
 	seen := map[string]bool{}
-	for i := 0; i < 5000; i++ {
+	for i := 0; i < 1000; i++ {
 		code := NewCode()
 		if !ValidCode(code) {
 			t.Fatalf("generated an invalid code: %q", code)

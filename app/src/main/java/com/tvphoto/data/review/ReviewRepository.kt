@@ -128,6 +128,55 @@ class ReviewRepository(
     /** The photo the current answer belongs to, so a late answer can be discarded. */
     private var currentLocalId: String? = null
 
+    /**
+     * Where the last QR picture sent a phone, when that was not this app's server.
+     *
+     * Kept here rather than derived from the picture, because a PNG cannot be read without
+     * a camera and the fact has to survive a health check: the settings row is where a
+     * person looks *after* noticing something is wrong, and every status refresh would
+     * otherwise wipe the sentence before anybody read it. Cleared with the answers of a
+     * server that is no longer ours ([forgetServerAnswers]) and cleared again the moment a
+     * picture arrives that does point at the configured address.
+     */
+    private var qrElsewhere: String? = null
+
+    /**
+     * The status for a server that is answering, carrying the QR note with it.
+     *
+     * Every "we are connected" path goes through here so that the note cannot be lost by
+     * the next health check — the one bug that would make this feature useless in the
+     * exact order a person uses it (see the field above).
+     */
+    private fun online(server: String, at: Long = System.currentTimeMillis()) =
+        ReviewStatus.Online(server = server, lastAt = at, qrPointsAt = qrElsewhere)
+
+    /**
+     * Records where a freshly fetched picture points, and says it out loud when that is
+     * somewhere else.
+     *
+     * The comparison is [qrPointsElsewhere]; what happens here is only the reporting.
+     * Nothing is *changed*: the address a code opens is frozen on the server when the code
+     * is minted and no client may rewrite it (`store.ensureCode`, §17.27), so the one
+     * useful thing this end can do with the fact is put it on screen — a television has no
+     * console, and "the code opens photos.example.com" is the difference between a mystery
+     * and a rebind.
+     */
+    private fun noteQrTarget(pageUrl: String?) {
+        val elsewhere = qrPointsElsewhere(pageUrl, settings.serverUrl)
+        if (elsewhere == qrElsewhere) return
+        qrElsewhere = elsewhere
+        if (elsewhere != null) {
+            Log.i(
+                TAG,
+                "图评: the code's picture opens $elsewhere, but this television is talking to " +
+                    "${settings.serverUrl} — the address is fixed on the short code, so the " +
+                    "server has to be told the new one (POST /v1/admin/codes/rebind)",
+            )
+        }
+        val current = _status.value
+        if (current is ReviewStatus.Online) _status.value = current.copy(qrPointsAt = elsewhere)
+    }
+
     private var socket: WebSocket? = null
 
     /**
@@ -197,12 +246,16 @@ class ReviewRepository(
      * These are keyed by *its* image ids, and the QR PNGs on disk encode *its* short codes,
      * so a server that no longer knows this device cannot honour any of them. Called from
      * the repair, where the fresh device is proof of the replacement, and from
-     * [forgetDevice], where the user pointed the app somewhere else.
+     * [onServerChanged], where the user pointed the app somewhere else.
      */
     private fun forgetServerAnswers() {
         identities.clear()
         commentCache.clear()
         healedPhotos.clear()
+        // The QR note goes with them: it is a statement about *that* server's codes, and
+        // carrying it to the next address would put a sentence on screen about a code
+        // nobody is holding any more.
+        qrElsewhere = null
         // Deleted here rather than on a coroutine: the very next thing to touch this
         // directory is the `qrFileFor` of whatever is registered next, and a few small
         // PNGs are not worth a race with it. A failure is ignored — a stale file that
@@ -263,7 +316,7 @@ class ReviewRepository(
                 settings.deviceToken = credentials.deviceToken
                 if (credentials.ownerToken.isNotBlank()) settings.ownerToken = credentials.ownerToken
                 clientFingerprint = "" // force a rebuild with the new token
-                _status.value = ReviewStatus.Online(built.server, System.currentTimeMillis())
+                _status.value = online(built.server)
                 true
             },
             onFailure = { error ->
@@ -376,6 +429,11 @@ class ReviewRepository(
             // own note about a page turn describes — one frame of the last picture's code
             // over this one.
             publishReady(cached, qrFileFor(cached.code))
+            // ...and then the picture is asked for again, because this answer may be from
+            // before the deployment moved. Nothing is drawn until the answer arrives, so
+            // the frame above is on screen the whole time (§17.31). A screensaver never
+            // draws a code, so it never asks for one.
+            if (!screenSaver) refreshQrOf(cached, localId)
             return
         }
 
@@ -437,6 +495,11 @@ class ReviewRepository(
         val cached = identities[identityKey(localId)]
         if (cached != null) {
             publishReady(cached, qrFileFor(cached.code))
+            // 扫码评论 is an explicit "show me a code for this photo right now", so it asks
+            // the server for the picture even when it has one on disk — and, if that picture
+            // opens somewhere else, it registers the photo again to move the code, which is
+            // the only thing this end can do about it (§17.31).
+            if (!screenSaver) refreshQrOf(cached, localId, reregisterWhenElsewhere = true)
             return
         }
         _view.value = ReviewView.Preparing
@@ -481,7 +544,7 @@ class ReviewRepository(
             onSuccess = { identity ->
                 if (identity != null) {
                     identities[identityKey(localId)] = identity
-                    _status.value = ReviewStatus.Online(client()?.server.orEmpty(), System.currentTimeMillis())
+                    _status.value = online(client()?.server.orEmpty())
                 }
                 identity
             },
@@ -605,17 +668,29 @@ class ReviewRepository(
     suspend fun thumbnailBytesFor(url: String): ByteArray? = thumbnailBytes(url)
 
     /**
-     * Forgets this device's registration, e.g. because the user pointed the app at a
-     * different server.
+     * The user pointed the app at a different address.
      *
-     * Wider than the repair's [forgetCredentials] on purpose: a token belongs to the server
-     * that issued it, so an address change also invalidates every identity, every comment
-     * and every QR PNG this repository holds — those are that *other* server's answers.
+     * Every identity, comment and QR picture this repository holds came from the *other*
+     * address and goes; the credentials stay.
+     *
+     * `forgetDevice` — which also drops the device id and both tokens — used to be what this
+     * was, and it is still exactly right when the new address is a *different* server: its
+     * device registration refuses to re-issue a token for an id it knows and a token it does
+     * not, so the only identity it will accept is a new one. What that reasoning misses is
+     * the other half of the same situation: a deployment that moved is usually the **same**
+     * server at a new address, where the stored token is still valid, the television is
+     * already a known device, and throwing the identity away is what makes the server unable
+     * to tell "this television, new address" from "a stranger". That distinction is the only
+     * signal by which a code's address can follow the device that owns it
+     * (`store.followAddress`, docs/tuping-design.md §17.31) — and it is the signal the
+     * household in that report needed.
+     *
+     * A server that does not know these credentials answers 401, and the repair path
+     * ([DeviceRepair]) does then exactly what this method used to do up front: a fresh device
+     * id, a fresh token, and the old answers already gone.
      */
-    fun forgetDevice() {
-        forgetCredentials()
+    fun onServerChanged() {
         forgetServerAnswers()
-        _status.value = ReviewStatus.NoServer
         _view.value = ReviewView.Hidden
     }
 
@@ -652,7 +727,7 @@ class ReviewRepository(
             onSuccess = {
                 if (!deviceIsAccepted(built)) return@fold
                 Log.i(TAG, "图评: ${built.server} answered and accepts this device")
-                _status.value = ReviewStatus.Online(built.server, System.currentTimeMillis())
+                _status.value = online(built.server)
             },
             onFailure = { error ->
                 Log.i(TAG, "图评: ${built.server} did not answer the health check: ${error.message}")
@@ -709,7 +784,7 @@ class ReviewRepository(
                 // the server about *this* code, and the picture it hands over is the only
                 // thing that knows which address the code currently opens (see [fetchQr]).
                 val qr = if (qrNeeded) fetchQr(identity.code, refresh = true) else qrFileFor(identity.code)
-                _status.value = ReviewStatus.Online(server, System.currentTimeMillis())
+                _status.value = online(server)
                 // The user may have moved on while this was in flight. Publishing then
                 // would put this photo's code over a different one — and [publishReady] is
                 // what checks that, for this path and the lookup's alike.
@@ -806,33 +881,45 @@ class ReviewRepository(
     /**
      * Fetches a QR PNG once and writes it where Coil can load it as a file.
      *
-     * [refresh] is the difference between "the server just answered for this photo" and
-     * "show the photo again". The file is named after the code, and a code's address can
-     * now change — `POST /v1/admin/codes/rebind` rewrites what an existing code opens, for
-     * the deployment that has moved to a new tunnel address (docs/tuping-design.md §17.27)
-     * — so the cached file is only trusted between registrations. After a registration the
-     * picture is fetched again, which is a few kilobytes and the only moment the answer can
-     * have changed; the code itself does not have to move for the address to be fixed, and
-     * that is exactly why trusting the file across a registration would keep a dead address
-     * on screen for the life of the install.
+     * [refresh] is the difference between "somebody is asking for a code" and "the server
+     * just answered for this photo". The file is named after its own bytes ([qrFileName])
+     * rather than after the code alone, because a code's address can change under it —
+     * `POST /v1/admin/codes/rebind` rewrites what an existing code opens (§17.27) — and a
+     * picture that changes while its file name stays the same is a picture the TV never
+     * redraws: `StateFlow` conflates the equal value and Coil answers from its memory cache.
+     *
+     * The `X-Page-Url` the server sends with the picture is handed to [noteQrTarget], which
+     * is the only thing in this app that can tell the operator their code opens somewhere
+     * other than the server they configured (§17.31).
      */
     private suspend fun fetchQr(code: String, refresh: Boolean = false): File? {
-        val file = File(qrDir, "$code.png")
-        if (!refresh && file.isFile && file.length() > 0) return file
+        if (!refresh) qrFileFor(qrDir, code)?.let { return it }
         val built = client() ?: return null
         return built.qrPng(code).fold(
-            onSuccess = { bytes ->
+            onSuccess = { image ->
+                noteQrTarget(image.pageUrl)
                 withContext(Dispatchers.IO) {
                     runCatching {
                         qrDir.mkdirs()
+                        val file = File(qrDir, qrFileName(code, image.png))
                         // Written to a temporary name and renamed, so a reader never sees
                         // half a PNG.
-                        val tmp = File(qrDir, "$code.tmp")
-                        tmp.writeBytes(bytes)
-                        if (!tmp.renameTo(file)) {
+                        val tmp = File(qrDir, "${file.name}.tmp")
+                        tmp.writeBytes(image.png)
+                        if (file.isFile) {
+                            // The same bytes are already on disk under this name; the rename
+                            // would be a no-op with a window in it, so the copy is dropped.
+                            tmp.delete()
+                        } else if (!tmp.renameTo(file)) {
                             file.delete()
                             tmp.renameTo(file)
                         }
+                        // Everything else for this code is a picture the server no longer
+                        // renders — a rebind, or a deployment that moved. Left behind, they
+                        // would be the newest file again the moment `lastModified` tied.
+                        qrDir.listFiles { old ->
+                            old.isFile && old.name.startsWith("$code-") && old != file
+                        }?.forEach { it.delete() }
                         file
                     }.getOrNull()
                 }
@@ -842,6 +929,68 @@ class ReviewRepository(
                 null
             },
         )
+    }
+
+    /**
+     * Fetches the code's picture again for a photo whose identity is already in hand, and
+     * redraws it if the server's answer turned out to be a different picture.
+     *
+     * This is what makes a photo opened twice in one session keep up with the server. The
+     * identity cache used to be the end of the story — the picture on disk was published
+     * and never questioned again — which meant that a rebind, or a deployment that moved,
+     * stayed invisible until the app was restarted: the picture was fetched once per
+     * *session* per code and the session of a television app is measured in days.
+     *
+     * A few kilobytes per opening, which is the same price the lookup already pays, and the
+     * only thing that can notice an address that changed while the app was running. The
+     * photo may have been left while the answer was in flight, so both the current photo
+     * and the current code are checked before anything is published.
+     *
+     * [reregisterWhenElsewhere] is the difference between the two callers, and it is about
+     * intent rather than about code. `扫码评论` is a person asking for a code for the photo in
+     * front of them *now* (`armPhoto`): when the picture that arrives opens some other
+     * address, registering the photo again is the one act that can move it, because the
+     * server follows the device that owns the code (`store.followAddress`, §17.31). Opening
+     * a photo is not that request (`openPhoto`) — nothing is uploaded on somebody's behalf,
+     * so a picture that points elsewhere is only *reported* there.
+     */
+    private fun refreshQrOf(identity: ReviewIdentity, localId: String, reregisterWhenElsewhere: Boolean = false) {
+        scope.launch {
+            val file = fetchQr(identity.code, refresh = true) ?: return@launch
+            if (currentLocalId != localId) return@launch
+            val ready = _view.value as? ReviewView.Ready ?: return@launch
+            if (ready.identity.code != identity.code) return@launch
+            // Nothing to redraw when the bytes are the ones already on screen: same file
+            // name means same picture, and republishing it would only churn the viewer.
+            if (ready.qrFile?.absolutePath != file.absolutePath) {
+                _view.value = ready.copy(qrFile = file)
+            }
+            if (reregisterWhenElsewhere && qrElsewhere != null) {
+                reregisterToMoveTheCode(identity, localId)
+            }
+        }
+    }
+
+    /**
+     * Registers the photo again because the code on screen opens somewhere else.
+     *
+     * The one attempt per code per session is deliberate. A server that does not follow
+     * devices (older than 0.1.4), a code an operator re-bound (`CodeOwnerOperator`) and a
+     * code that belongs to another television all answer this the same way — the address
+     * stays where it is — and asking again for every press would be an upload per press that
+     * cannot change anything. What is left on screen when it fails is the sentence that says
+     * where the code really points, which is the honest answer.
+     */
+    private fun reregisterToMoveTheCode(identity: ReviewIdentity, localId: String) {
+        val last = lastOpen ?: return
+        if (PhotoIdentity.localId(last.source, last.item) != localId) return
+        if (!healedPhotos.add("address:" + identity.code)) return
+        Log.i(
+            TAG,
+            "图评: ${identity.code} opens $qrElsewhere, so ${last.item.id} is registered again " +
+                "to move it to ${settings.serverUrl}",
+        )
+        scope.launch { register(last.item, last.source, localId, qrNeeded = !last.screenSaver) }
     }
 
     private fun refreshComments(identity: ReviewIdentity) {
@@ -960,8 +1109,7 @@ class ReviewRepository(
 
     private fun identityKey(localId: String): String = localId
 
-    private fun qrFileFor(code: String): File? =
-        File(qrDir, "$code.png").takeIf { it.isFile && it.length() > 0 }
+    private fun qrFileFor(code: String): File? = qrFileFor(qrDir, code)
 
     /** A ULID-shaped device id: 26 Crockford base32 characters, time first. */
     private fun randomDeviceId(): String {

@@ -189,17 +189,26 @@ func TestQRFallsBackToTheServersOwnAddress(t *testing.T) {
 	}
 }
 
-// TestAnExistingCodeKeepsItsAddress: re-registering the same photo from a different network
-// must not re-point a link that is already in somebody's hand.
-func TestAnExistingCodeKeepsItsAddress(t *testing.T) {
-	h := newHarness(t)
+// TestAnExistingCodeFollowsTheDeviceThatOwnsIt: re-registering the same photo from another
+// address moves *that code*, because the only party that knows the deployment has moved is
+// the television that owns the photo — and requiring an operator with a shell and an admin
+// token is what turned "I moved my tunnel and my QR codes still open the old IP" into a
+// support thread (docs/tuping-design.md §17.31).
+//
+// What this test asserted until then is worth keeping in view: the address was frozen at
+// mint time, because a guest may be holding a printed or screenshotted link. That invariant
+// survives in the half this test deliberately does not cover — *another* device registering
+// the same photo leaves the address alone — which is `codes_follow_test.go`.
+func TestAnExistingCodeFollowsTheDeviceThatOwnsIt(t *testing.T) {
+	h := newHarnessWithBaseURL(t, "")
 	deviceID, deviceToken, ownerToken := h.issueDevice("TV")
 	raw := photoFixture(t, 0)
 
 	first := h.registerPhotoWithBase(
 		deviceID, deviceToken, ownerToken, "1015", raw, "", "http://106.52.237.179:53347",
 	)
-	// Same photo, same device, same scope: `ensureCode` finds the existing code.
+	// Same photo, same device, same scope: `ensureCode` finds the existing code, and the
+	// same television reports the address it is talking to now.
 	second := h.registerPhotoWithBase(
 		deviceID, deviceToken, ownerToken, "1015", raw, "", "http://198.51.100.9:9000",
 	)
@@ -208,8 +217,8 @@ func TestAnExistingCodeKeepsItsAddress(t *testing.T) {
 	}
 
 	page, _ := h.fetchQRPageURL(first.Code)
-	want := "http://106.52.237.179:53347/c/" + first.Code
+	want := "http://198.51.100.9:9000/c/" + first.Code
 	if page != want {
-		t.Errorf("an existing code was re-pointed to %q, want it left at %q", page, want)
+		t.Errorf("the code opens %q, want the address its owner just registered it from (%q)", page, want)
 	}
 }

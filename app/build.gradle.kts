@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.5.9"
+val appVersionName = "1.5.10"
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -326,7 +326,33 @@ android {
         // whose whole surface is one. Nothing else on the rail moved — the other five items
         // have nothing after their label, so handing the label the remaining width draws
         // exactly what it drew before.
-        versionCode = 35
+        // 36 is 1.5.10, which is 35 with the number moved for the usual reason — a
+        // television's installer refuses to lay a build over another with the same
+        // versionCode — and the other half of the report 1.5.9 answered with words.
+        //
+        // 1.5.9 made the television re-fetch a code's picture and *say* when it points
+        // somewhere other than the server it is configured for. That was honest and it was
+        // not enough: the report was "I moved to server B and the code still opens A", and
+        // what it got back was a sentence explaining that the address is frozen on the short
+        // code. It is frozen — but the party that knows the deployment has moved is the
+        // television, and the server now lets it move its own code (`store.followAddress`,
+        // docs/tuping-design.md §17.31). Two things on this side were in the way:
+        //
+        //   (1) The picture. A code's PNG was named after the code alone, so replacing it
+        //       left `StateFlow` conflating an equal value while Coil handed back the cached
+        //       bitmap — a re-fetch nobody could see. The name carries the picture's own
+        //       SHA-256 now, and opening a photo again re-fetches it, so a `rebind` on the
+        //       server reaches the screen without restarting the App.
+        //   (2) The identity. Changing the address called `forgetDevice`, which dropped the
+        //       device id and both tokens together with the old answers — so the next
+        //       registration arrived at the server as a stranger, and "the same television,
+        //       new address" was exactly what the follow rule has to recognise. The
+        //       credentials are kept now; a server that does not know them answers 401, and
+        //       the repair path already answers that by forging a new identity.
+        //
+        // Against a 0.1.3 server nothing breaks: the code keeps its frozen address and the
+        // settings row says where it points, which is all 1.5.9 could do.
+        versionCode = 36
         versionName = appVersionName
 
         // How long the app may sit untouched before the 屏保相册 starts playing. The release

@@ -89,8 +89,14 @@ func (s *Server) handleAdminRebindCodes(w http.ResponseWriter, r *http.Request) 
 		// The half of this operation that lives on the television. Said in the response
 		// because the caller is standing at a shell, and a count of 217 changed rows looks
 		// like success while the code on the wall still opens the old address.
-		"next": "在电视上重启一次 App：每张照片重新注册时会抓一张新的二维码，也就换成了新地址。" +
-			"已经在内存里的照片不会自己重画。",
+		//
+		// Two client generations read this sentence. A client that asks for a code's picture
+		// again when the photo is opened (1.5.10 and later) needs nothing more than that
+		// look; an older one only refetches while a photo is being *registered*, so it needs
+		// the App restarted. The lighter action is named first and the other kept as the
+		// fallback rather than assuming which app is on the wall.
+		"next": "在电视上把这张照片重新打开一次就会换过来（1.5.10 起）；" +
+			"更早的版本要重启一次 App：注册每张照片时才会抓新的二维码。",
 	}
 	// The same warning the deployment gets at startup and on /healthz, for the same mistake:
 	// a private address is fine, a private address behind a television that reaches this

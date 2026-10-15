@@ -109,7 +109,10 @@ Slideshow:
 - **A photo has to be opened for review before the server knows about it.** Preview a photo,
   press ↑ for the information band, and press **Scan to comment**: the band closes, the QR
   code appears in the corner, and the danmaku comes on — all at once. Simply looking at photos
-  uploads nothing; until you press that button the server does not know the picture exists.
+  adds nothing; until you press that button the server does not know the picture exists. (One
+  exception, and only after the review server's address has changed: a photo the server *does*
+  already hold is registered once more when you open it, if its code opens somewhere else —
+  that adds no photo, it just gets the address right.)
 - A photo that was opened before is recognised afterwards and shows its code and its danmaku
   straight away, **without being uploaded again**. A second television has to open each photo
   once for itself.

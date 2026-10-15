@@ -11,7 +11,7 @@ plugins {
  * BuildConfig.VERSION_NAME) and the APK's file name, so bumping it here also renames
  * the artifact that gets published.
  */
-val appVersionName = "1.5.10"
+val appVersionName = "1.5.11"
 android {
     namespace = "com.tvphoto"
     compileSdk = 36
@@ -352,7 +352,28 @@ android {
         //
         // Against a 0.1.3 server nothing breaks: the code keeps its frozen address and the
         // settings row says where it points, which is all 1.5.9 could do.
-        versionCode = 36
+        // 37 is 1.5.11, which is 36 with the number moved for the usual reason — a
+        // television's installer refuses to lay a build over another with the same
+        // versionCode — and one report from the television: "pressing 扫码评论 refreshes the
+        // code, but a code that appears by itself still opens the old address".
+        //
+        // 1.5.10 moved a code only where a person had pressed something. What it missed is the
+        // path that draws a code with nobody pressing anything: opening a photo the server
+        // already holds, which is how most codes appear at all (a lookup hit publishes the code
+        // and the danmaku without an upload, §17.28). An album of photos registered under an
+        // old address therefore kept showing it, one photo at a time — the whole of the report.
+        //
+        // Every path that ends with a code on screen now asks the same question and takes the
+        // same answer: if the picture that arrives opens somewhere else, the photo is
+        // registered again and the server moves the code. That is not a hole in "nothing is
+        // uploaded until somebody asks": the caller only gets there after a lookup or a cached
+        // identity was a *hit*, so the server already holds the photo and the registration
+        // re-states nothing but the address.
+        //
+        // Two guards, so a refusal costs one request instead of one per photo: once per code
+        // per session, and — because a pinned `TUPING_BASE_URL` refuses every code at once —
+        // once per session for the whole server.
+        versionCode = 37
         versionName = appVersionName
 
         // How long the app may sit untouched before the 屏保相册 starts playing. The release

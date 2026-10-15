@@ -141,6 +141,17 @@ class ReviewRepository(
     private var qrElsewhere: String? = null
 
     /**
+     * The server has refused to move a code's address in this session.
+     *
+     * Set when [reregisterToMoveTheCode] registers a photo and the code still opens somewhere
+     * else afterwards. One refusal is the answer for every code on that server — a pinned
+     * `TUPING_BASE_URL` is a deployment-wide decision, and an older server has no follow rule
+     * at all — so this is what keeps an album's worth of photos from being one upload each
+     * to re-learn the same "no". Cleared with the answers of a server that is no longer ours.
+     */
+    private var codeFollowRefused: Boolean = false
+
+    /**
      * The status for a server that is answering, carrying the QR note with it.
      *
      * Every "we are connected" path goes through here so that the note cannot be lost by
@@ -254,8 +265,9 @@ class ReviewRepository(
         healedPhotos.clear()
         // The QR note goes with them: it is a statement about *that* server's codes, and
         // carrying it to the next address would put a sentence on screen about a code
-        // nobody is holding any more.
+        // nobody is holding any more. A refusal is about that server too.
         qrElsewhere = null
+        codeFollowRefused = false
         // Deleted here rather than on a coroutine: the very next thing to touch this
         // directory is the `qrFileFor` of whatever is registered next, and a few small
         // PNGs are not worth a race with it. A failure is ignored — a stale file that
@@ -450,6 +462,17 @@ class ReviewRepository(
                 // same (§17.27). A few kilobytes per photo per session, and the reason a
                 // rebind only needs the television restarted.
                 publishReady(known, if (screenSaver) qrFileFor(known.code) else fetchQr(known.code, refresh = true))
+                // ...and if that picture opens somewhere else, the code is moved rather than
+                // merely reported — see [reregisterToMoveTheCode]. **This is the path that
+                // draws a code with nobody pressing anything**, and a code nobody asked for
+                // is still a code a guest will scan: an album's worth of photos registered
+                // under an old address is one report away from "the QR that appears by itself
+                // is still the old one" (docs/verification.md §34).
+                //
+                // It is not a hole in "nothing is uploaded until somebody asks": a lookup
+                // *hit* means the server already holds this photo, so registering it again
+                // adds no photo to anybody's server. What it re-states is the address.
+                if (!screenSaver && qrElsewhere != null) reregisterToMoveTheCode(known, localId)
                 return@launch
             }
             // A miss. Only a show that carries 图评 registers by itself; anything else stays
@@ -470,8 +493,10 @@ class ReviewRepository(
     /**
      * The explicit act: put *this* photo on the server, so it can be commented on.
      *
-     * Bound to the viewer's 图评 row, and the only path in the app that uploads a thumbnail
-     * outside a show (§17.28). Everything after it is the existing machinery — identity
+     * Bound to the viewer's 图评 row, and the only path in the app that puts a photo the
+     * server does not already hold onto it (§17.28). The one other registration in this file
+     * is [reregisterToMoveTheCode], which only ever runs for a photo the server has just
+     * confirmed it knows. Everything after it is the existing machinery — identity
      * matching, a short code, the QR picture — so a photo that was registered from another
      * television or another album comes back as the same identity with the same thread.
      *
@@ -497,9 +522,8 @@ class ReviewRepository(
             publishReady(cached, qrFileFor(cached.code))
             // 扫码评论 is an explicit "show me a code for this photo right now", so it asks
             // the server for the picture even when it has one on disk — and, if that picture
-            // opens somewhere else, it registers the photo again to move the code, which is
-            // the only thing this end can do about it (§17.31).
-            if (!screenSaver) refreshQrOf(cached, localId, reregisterWhenElsewhere = true)
+            // opens somewhere else, it moves the code (§17.31).
+            if (!screenSaver) refreshQrOf(cached, localId)
             return
         }
         _view.value = ReviewView.Preparing
@@ -946,15 +970,12 @@ class ReviewRepository(
      * photo may have been left while the answer was in flight, so both the current photo
      * and the current code are checked before anything is published.
      *
-     * [reregisterWhenElsewhere] is the difference between the two callers, and it is about
-     * intent rather than about code. `扫码评论` is a person asking for a code for the photo in
-     * front of them *now* (`armPhoto`): when the picture that arrives opens some other
-     * address, registering the photo again is the one act that can move it, because the
-     * server follows the device that owns the code (`store.followAddress`, §17.31). Opening
-     * a photo is not that request (`openPhoto`) — nothing is uploaded on somebody's behalf,
-     * so a picture that points elsewhere is only *reported* there.
+     * When the picture that arrives opens somewhere else, the code is moved rather than
+     * merely reported ([reregisterToMoveTheCode]) — the same thing `openPhoto`'s lookup path
+     * does, because both of them end with a code on screen and neither of them is a place
+     * where "whose address is it" may depend on which way the photo was reached.
      */
-    private fun refreshQrOf(identity: ReviewIdentity, localId: String, reregisterWhenElsewhere: Boolean = false) {
+    private fun refreshQrOf(identity: ReviewIdentity, localId: String) {
         scope.launch {
             val file = fetchQr(identity.code, refresh = true) ?: return@launch
             if (currentLocalId != localId) return@launch
@@ -965,23 +986,38 @@ class ReviewRepository(
             if (ready.qrFile?.absolutePath != file.absolutePath) {
                 _view.value = ready.copy(qrFile = file)
             }
-            if (reregisterWhenElsewhere && qrElsewhere != null) {
-                reregisterToMoveTheCode(identity, localId)
-            }
+            if (qrElsewhere != null) reregisterToMoveTheCode(identity, localId)
         }
     }
 
     /**
      * Registers the photo again because the code on screen opens somewhere else.
      *
-     * The one attempt per code per session is deliberate. A server that does not follow
-     * devices (older than 0.1.4), a code an operator re-bound (`CodeOwnerOperator`) and a
-     * code that belongs to another television all answer this the same way — the address
-     * stays where it is — and asking again for every press would be an upload per press that
-     * cannot change anything. What is left on screen when it fails is the sentence that says
-     * where the code really points, which is the honest answer.
+     * Registering is the only act this end has that can move a code's address: the server
+     * follows the device that owns the code (`store.followAddress`, §17.31). It is
+     * deliberately *not* a hole in "nothing is uploaded until somebody asks" (§17.28) — the
+     * caller only reaches here when a lookup or a cached identity was a **hit**, so the
+     * server already holds this photo and re-registering it adds no photo to anybody's
+     * server. What it re-states is the address.
+     *
+     * Two guards, for two different kinds of waste:
+     *
+     *   - **once per code per session**, because a server that does not follow devices
+     *     (older than 0.1.4), a code an operator re-bound (`CodeOwnerOperator`) and a code
+     *     that belongs to another television all answer "the address stays where it is", and
+     *     asking again for the same code cannot change that;
+     *   - **once per address per session** ([codeFollowRefused]), because the case that
+     *     refuses *every* code is a deployment whose operator pinned `TUPING_BASE_URL` —
+     *     the television on the LAN while the phones get a public address. There, an album
+     *     of photos would otherwise be one wasted upload per photo, for a decision the
+     *     server has already made clear it will not take.
+     *
+     * What is left on screen when it refuses is the sentence that says where the code really
+     * points, which is the honest answer, and the address that is genuinely the right one
+     * for the guest's phone.
      */
     private fun reregisterToMoveTheCode(identity: ReviewIdentity, localId: String) {
+        if (codeFollowRefused) return
         val last = lastOpen ?: return
         if (PhotoIdentity.localId(last.source, last.item) != localId) return
         if (!healedPhotos.add("address:" + identity.code)) return
@@ -990,7 +1026,12 @@ class ReviewRepository(
             "图评: ${identity.code} opens $qrElsewhere, so ${last.item.id} is registered again " +
                 "to move it to ${settings.serverUrl}",
         )
-        scope.launch { register(last.item, last.source, localId, qrNeeded = !last.screenSaver) }
+        scope.launch {
+            register(last.item, last.source, localId, qrNeeded = !last.screenSaver)
+            // The note is cleared by the fetch inside `register` when the address moved, so a
+            // note that survives is the server saying no — to every code, not just this one.
+            if (qrElsewhere != null) codeFollowRefused = true
+        }
     }
 
     private fun refreshComments(identity: ReviewIdentity) {
